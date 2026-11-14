@@ -56,7 +56,7 @@ fun SettingsScreen(feed: Feed?, onBack: (() -> Unit)? = null, onSetup: (() -> Un
     var interval by remember { mutableIntStateOf(prefs.intervalMin) }
     var feedUrl by remember { mutableStateOf(prefs.feedUrl) }
     var fmLocal by remember { mutableStateOf(prefs.fmkoreaLocal) }
-    var redditLocal by remember { mutableStateOf(prefs.redditLocal) }
+    var redditId by remember { mutableStateOf(prefs.redditClientId) }
     var geminiKey by remember { mutableStateOf(prefs.geminiKey) }
     var geminiStatus by remember { mutableStateOf<String?>(null) }
     var groqKey by remember { mutableStateOf(prefs.groqKey) }
@@ -258,16 +258,23 @@ fun SettingsScreen(feed: Feed?, onBack: (() -> Unit)? = null, onSetup: (() -> Un
 
                 // Reddit
                 SettingsCard {
-                    AccentTitle("Reddit 휴대폰에서 가져오기 (해외 탭)")
+                    AccentTitle("Reddit 연결 (해외 탭)")
                     Spacer(Modifier.height(8.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            "Reddit은 로그인 없는 접근을 휴대폰에서도 막는 경우가 많아서 기본으로 꺼져 있어요. 켜면 30분에 한 번 시도하고, 막히면 1시간 쉬어요.",
-                            fontSize = 13.sp, lineHeight = 19.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f),
-                        )
-                        Spacer(Modifier.width(12.dp))
-                        PurpleSwitch(redditLocal) { redditLocal = it; prefs.redditLocal = it }
-                    }
+                    Text(
+                        "Reddit은 로그인 없는 접근을 막아서, 무료로 앱을 등록해 받은 '클라이언트 ID'가 필요해요.\n" +
+                            "① 아래 버튼으로 Reddit 앱 등록 페이지를 열고 로그인\n" +
+                            "② 'create another app…' → 이름 아무거나, 종류는 installed app, redirect uri는 http://localhost\n" +
+                            "③ 만들어진 앱 이름 바로 아래의 짧은 문자열(클라이언트 ID)을 복사해 여기에 붙여넣기",
+                        fontSize = 13.sp, lineHeight = 19.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    OutlinedPillField(redditId, { redditId = it; prefs.redditClientId = it }, "클라이언트 ID 붙여넣기", 50.dp, 13.sp)
+                    Spacer(Modifier.height(10.dp))
+                    OutlinedButton(shape = CircleShape, onClick = {
+                        ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://www.reddit.com/prefs/apps")))
+                    }) { Text("Reddit 앱 등록 페이지", fontWeight = FontWeight.Bold) }
+                    Spacer(Modifier.height(6.dp))
+                    Text("붙여넣은 뒤 해외 탭을 아래로 당겨 새로고침하면 Reddit 글이 나와요. 실패하면 이유가 목록 위에 표시돼요.", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
 
                 // 확인 주기

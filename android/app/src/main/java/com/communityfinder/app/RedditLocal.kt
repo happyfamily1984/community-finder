@@ -42,6 +42,29 @@ object RedditLocal {
         }
     }
 
+    /** 익명(로그인 없는) 앱 토큰 발급. 약 24시간 유효해서 저장해 두고 재사용 */
+    private fun oauthToken(state: JSONObject, clientId: String, now: Long): String? {
+        state.optString("token").takeIf { it.isNotEmpty() && now < state.optLong("tokenExp") && state.optString("tokenFor") == clientId }?.let { return it }
+        val conn = URL("https://www.reddit.com/api/v1/access_token").openConnection() as HttpURLConnection
+        conn.requestMethod = "POST"; conn.doOutput = true
+        conn.connectTimeout = 10000; conn.readTimeout = 15000
+        conn.setRequestProperty("User-Agent", UA)
+        conn.setRequestProperty("Authorization", "Basic " + android.util.Base64.encodeToString("$clientId:".toByteArray(), android.util.Base64.NO_WRAP))
+        conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
+        return try {
+            conn.outputStream.use { it.write("grant_type=https%3A%2F%2Foauth.reddit.com%2Fgrants%2Finstalled_client&device_id=DO_NOT_TRACK_THIS_DEVICE".toByteArray()) }
+            val code = conn.responseCode
+            if (code != 200) { state.put("authError", "HTTP $code · 클라이언트 ID를 확인해 주세요"); return null }
+            val o = JSONObject(conn.inputStream.bufferedReader().use { it.readText() })
+            val token = o.optString("access_token")
+            if (token.isEmpty()) { state.put("authError", o.optString("error", "토큰 없음")); return null }
+            state.put("token", token).put("tokenExp", now + (o.optLong("expires_in", 3600) - 300) * 1000).put("tokenFor", clientId)
+            token
+        } finally {
+            conn.disconnect()
+        }
+    }
+
     /** 공식 RSS(Atom) 피드 파싱. 점수가 없어서 순서(인기순)로 화제도를 매김 */
     fun parseRss(xml: String, sourceId: String, now: Long): List<Post> {
         val doc = org.jsoup.Jsoup.parse(xml, "", org.jsoup.parser.Parser.xmlParser())
@@ -70,6 +93,31 @@ object RedditLocal {
                 return source(id, sub, color, error == null && posts.isNotEmpty(), error) to posts
             }
             if (!network) return@map cached(null)
+            val clientId = Prefs(ctx).redditClientId
+            if (clientId.isNotBlank()) {
+                // 공식 경로: 무료로 등록한 앱의 클라이언트 ID로 익명 인증 후 공식 API 사용 (오픈소스 Reddit 앱들과 같은 방식)
+                if (now - entry.optLong("fetchedAt", 0) < MIN_INTERVAL_MS && entry.has("posts")) return@map cached(null)
+                return@map try {
+                    val token = oauthToken(state, clientId, now) ?: return@map cached("Reddit 인증 실패 (${state.optString("authError")})")
+                    val conn = URL("https://oauth.reddit.com/r/$sub/top?t=day&limit=30&raw_json=1").openConnection() as HttpURLConnection
+                    conn.connectTimeout = 10000; conn.readTimeout = 15000
+                    conn.setRequestProperty("User-Agent", UA)
+                    conn.setRequestProperty("Authorization", "Bearer $token")
+                    try {
+                        val code = conn.responseCode
+                        if (code == 401) state.remove("token")
+                        if (code != 200) return@map cached("Reddit API HTTP $code")
+                        val posts = parse(conn.inputStream.bufferedReader().use { it.readText() }, id, now)
+                        if (posts.isEmpty()) return@map cached("글을 찾지 못했어요")
+                        state.put(id, JSONObject().put("fetchedAt", now).put("posts", JSONArray().also { a -> posts.forEach { a.put(PostStore.toJson(it)) } }))
+                        source(id, sub, color, true, null) to posts
+                    } finally {
+                        conn.disconnect()
+                    }
+                } catch (e: Exception) {
+                    cached(e.message ?: "연결 실패")
+                }
+            }
             if (now < cooldownUntil) return@map cached("Reddit이 접근을 막음 (${state.optString("note")}) · ${(cooldownUntil - now) / 60000 + 1}분 뒤 다시 시도")
             if (now - entry.optLong("fetchedAt", 0) < MIN_INTERVAL_MS && entry.has("posts")) return@map cached(null)
 

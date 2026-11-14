@@ -70,6 +70,11 @@ class Prefs(ctx: Context) {
         get() = sp.getLong("groqCooldown", 0)
         set(v) = sp.edit().putLong("groqCooldown", v).apply()
 
+    /** Reddit 공식 API용 클라이언트 ID (reddit.com/prefs/apps 에서 무료 등록한 installed app) */
+    var redditClientId: String
+        get() = sp.getString("redditClientId", "") ?: ""
+        set(v) = sp.edit().putString("redditClientId", v.trim()).apply()
+
     var onboardingDone: Boolean
         get() = sp.getBoolean("onboardingDone", false)
         set(v) = sp.edit().putBoolean("onboardingDone", v).apply()

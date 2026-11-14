@@ -128,8 +128,6 @@ export const SOURCES = [
   { id: 'lemmy-meirl', name: 'Lemmy me_irl', board: '오늘의 인기', url: 'https://lemmy.world/c/me_irl', color: '#2e9e6b', host: 'lemmy.world', community: 'me_irl', fetch: fetchLemmy },
   { id: 'lemmy-comics', name: 'Lemmy 만화', board: '오늘의 인기', url: 'https://lemmy.world/c/comicstrips', color: '#4a9d5f', host: 'lemmy.world', community: 'comicstrips', fetch: fetchLemmy },
   { id: 'lemmy-greentext', name: 'Lemmy greentext', board: '오늘의 인기', url: 'https://sh.itjust.works/c/greentext', color: '#789922', host: 'lemmy.world', community: 'greentext@sh.itjust.works', fetch: fetchLemmy },
-  { id: 'lemmy-comebacks', name: 'Lemmy 사이다 댓글', board: '오늘의 인기', url: 'https://lemmy.world/c/clevercomebacks', color: '#16a085', host: 'lemmy.world', community: 'clevercomebacks', fetch: fetchLemmy },
-  { id: 'lemmy-tumblr', name: 'Lemmy tumblr', board: '오늘의 인기', url: 'https://lemmy.world/c/tumblr', color: '#36465d', host: 'lemmy.world', community: 'tumblr', fetch: fetchLemmy },
   { id: 'lemmy-proghumor', name: 'Lemmy 개발자 유머', board: '오늘의 인기', url: 'https://programming.dev/c/programmer_humor', color: '#27ae60', host: 'lemmy.world', community: 'programmer_humor@programming.dev', fetch: fetchLemmy },
   // ---- 일본 유머 (id가 jp- 로 시작하면 앱에서 '해외' 탭 + 일본어 번역 대상) ----
   { id: 'jp-hatena', name: '하테나 북마크', board: '재미 인기글', url: 'https://b.hatena.ne.jp/hotentry/fun', color: '#00a4de', feed: 'https://b.hatena.ne.jp/hotentry/fun.rss', fetch: fetchRss },

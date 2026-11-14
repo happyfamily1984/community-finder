@@ -121,7 +121,7 @@ object FeedRepository {
             val (src, posts) = if (network) FmkoreaLocal.load(ctx) else FmkoreaLocal.cachedOnly(ctx)
             f = merge(f, src, posts)
         }
-        if (prefs.redditLocal) RedditLocal.load(ctx, network).forEach { (src, posts) -> f = merge(f, src, posts) }
+        if (prefs.redditLocal || prefs.redditClientId.isNotBlank()) RedditLocal.load(ctx, network).forEach { (src, posts) -> f = merge(f, src, posts) }
         return f
     }
 
