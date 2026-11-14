@@ -66,6 +66,8 @@ private val SortBg = Color(0xFFFFEFE6)
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // 글 스캔(전체 페이지 캡처)용: 첫 WebView가 만들어지기 전에 호출해야 화면 밖 부분까지 그려짐
+        android.webkit.WebView.enableSlowWholeDocumentDraw()
         enableEdgeToEdge()
         HotPostWorker.schedule(this)
         setContent { AppTheme { App() } }
@@ -139,8 +141,14 @@ fun App() {
         }
         storeVersion++
     }
-    val open: (Post) -> Unit = { openPost(ctx, it); storeVersion++ }
+    // 글 누르면 앱 안에서 모바일 화면 스캔 이미지로 보기
+    var preview by remember { mutableStateOf<Post?>(null) }
+    val open: (Post) -> Unit = { PostStore.recent(ctx).add(it); storeVersion++; preview = it }
 
+    if (preview != null) BackHandler { preview = null }
+
+
+    Box(Modifier.fillMaxSize()) {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         bottomBar = { BottomBar(tab) { tab = it } },
@@ -164,6 +172,18 @@ fun App() {
                 Tab.SETTINGS -> SettingsScreen(feed, onBack = { tab = Tab.HOME })
             }
         }
+    }
+    // 글 미리보기(스캔 이미지)는 홈 위에 겹쳐서 띄움 → 돌아오면 목록 위치 그대로
+    preview?.let { p -> key(p.id) {
+        PreviewScreen(
+            post = p,
+            source = feed?.sourceById?.get(p.source) ?: knownSource(p.source),
+            favorite = p.id in favIds,
+            onToggleFavorite = { toggleFav(p) },
+            onOpenSite = { openPost(ctx, p) },
+            onBack = { preview = null },
+        )
+    } }
     }
 }
 
@@ -308,7 +328,7 @@ fun SavedScreen(
     }
 }
 
-private fun knownSource(id: String): Source? = if (id == FmkoreaLocal.ID) FmkoreaLocal.SOURCE_TEMPLATE else null
+fun knownSource(id: String): Source? = if (id == FmkoreaLocal.ID) FmkoreaLocal.SOURCE_TEMPLATE else null
 
 @Composable
 fun EmptyText(text: String) {
