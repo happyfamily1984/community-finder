@@ -1,0 +1,13 @@
+{
+  "name": "커뮤니티 파인더",
+  "short_name": "커뮤파인더",
+  "description": "국내 주요 커뮤니티 화제글을 한곳에서 보고 알림 받기",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f6f6f8",
+  "theme_color": "#ff5a36",
+  "lang": "ko",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

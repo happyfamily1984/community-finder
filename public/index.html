@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>커뮤니티 파인더</title>
+  <meta name="theme-color" content="#ff5a36">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/icon.svg">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <img src="/icon.svg" alt="" width="28" height="28">
+      <h1>커뮤니티 파인더</h1>
+      <span id="demoBadge" class="badge" hidden>데모</span>
+    </div>
+    <button id="settingsBtn" class="icon-btn" aria-label="알림 설정">🔔</button>
+  </header>
+
+  <nav class="chips" id="sourceChips" aria-label="커뮤니티 선택"></nav>
+
+  <div class="toolbar">
+    <input id="search" type="search" placeholder="제목 검색" autocomplete="off">
+    <select id="sort" aria-label="정렬">
+      <option value="score">🔥 화제도순</option>
+      <option value="surge">🚀 급상승순</option>
+      <option value="views">👀 조회수순</option>
+      <option value="comments">💬 댓글순</option>
+      <option value="likes">👍 추천순</option>
+      <option value="latest">🕒 새로 올라온 순</option>
+    </select>
+  </div>
+
+  <p class="meta" id="meta"></p>
+  <ol class="list" id="list"></ol>
+
+  <dialog id="settings">
+    <form method="dialog" class="sheet">
+      <h2>알림 설정</h2>
+      <p class="hint">새 글이 각 커뮤니티 베스트에 오르면, 아래 조건에 맞는 글만 알림으로 보내드려요.</p>
+
+      <label class="field">
+        <span>화제도 기준 <b id="minScoreVal">80</b>점 이상</span>
+        <input id="minScore" type="range" min="0" max="100" step="5" value="80">
+      </label>
+
+      <label class="field">
+        <span>키워드 알림 <small>(쉼표로 구분, 점수와 상관없이 알림)</small></span>
+        <input id="keywords" type="text" placeholder="예: 아이폰, 로또, 손흥민">
+      </label>
+
+      <fieldset class="field">
+        <legend>알림 받을 커뮤니티</legend>
+        <div id="sourceChecks" class="checks"></div>
+      </fieldset>
+
+      <p id="pushStatus" class="hint"></p>
+      <div class="actions">
+        <button type="button" id="pushToggle" class="primary">알림 켜기</button>
+        <button type="button" id="pushTest">테스트 알림</button>
+        <button value="close">닫기</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="/app.js" type="module"></script>
+</body>
+</html>
