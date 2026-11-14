@@ -58,6 +58,9 @@ class ThreadsKitTest {
         val white = 0xFFFFFFFF.toInt(); val gray = 0xFF888888.toInt(); val black = 0xFF000000.toInt()
         val bordered = IntArray(1080) { white }.also { it[0] = gray; it[1] = gray; it[1078] = gray; it[1079] = gray }
         assertTrue(ThreadsKit.isBlankRow(bordered))
+        // 회색 바탕 + 가운데 흰 카드 (네이트판 같은 레이아웃)
+        val card = IntArray(1080) { if (it in 40..1040) white else 0xFFF2F2F2.toInt() }.also { it[40] = gray; it[1040] = gray }
+        assertTrue(ThreadsKit.isBlankRow(card))
         val text = IntArray(1080) { if (it in 100..400 && it % 3 == 0) black else white }
         assertTrue(!ThreadsKit.isBlankRow(text))
     }

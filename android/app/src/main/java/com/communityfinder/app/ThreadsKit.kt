@@ -97,23 +97,22 @@ object ThreadsKit {
     }
 
     /**
-     * 여백 줄인지: 배경색과 다른 점이 거의 없으면 여백.
-     * 페이지 양옆의 테두리 선·스크롤바 같은 가는 세로선은 무시 (전체의 1.5%까지 허용).
+     * 여백 줄인지: 가로로 훑었을 때 색이 바뀌는 지점(윤곽)이 거의 없으면 여백.
+     * 회색 바탕 + 흰 카드, 양옆 테두리 선처럼 색이 몇 번만 바뀌는 줄은 여백으로 보고,
+     * 글자·그림처럼 색이 여러 번 바뀌는 줄만 내용으로 봄.
      */
     fun isBlankRow(row: IntArray): Boolean {
-        val base = row[row.size / 2]
-        var diff = 0
-        var n = 0
-        var x = 0
+        var edges = 0
+        var x = 2
         while (x < row.size) {
             val p = row[x]
-            val d = Math.abs(((p shr 16) and 255) - ((base shr 16) and 255)) +
-                Math.abs(((p shr 8) and 255) - ((base shr 8) and 255)) + Math.abs((p and 255) - (base and 255))
-            if (d > 30) diff++
-            n++
+            val q = row[x - 2]
+            val d = Math.abs(((p shr 16) and 255) - ((q shr 16) and 255)) +
+                Math.abs(((p shr 8) and 255) - ((q shr 8) and 255)) + Math.abs((p and 255) - (q and 255))
+            if (d > 40 && ++edges > 8) return false
             x += 2
         }
-        return diff <= maxOf(2, n * 15 / 1000)
+        return true
     }
 
     fun split(src: Bitmap, avoid: List<IntRange> = emptyList()): List<Bitmap> {

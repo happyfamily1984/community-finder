@@ -261,6 +261,10 @@ fun PageScanner(post: Post, attempt: Int, onState: (ScanState) -> Unit) {
                         settings.domStorageEnabled = true
                         settings.loadWithOverviewMode = true
                         settings.useWideViewPort = true
+                        if (post.source in ISOLATE_SELECTORS) {
+                            // 브라우저의 '데스크톱 사이트' 보기와 같음: PC 페이지에서 본문 위치가 확실해서 본문만 추려냄
+                            settings.userAgentString = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
+                        }
                         webViewClient = object : WebViewClient() {
                             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest) = false
                             override fun onPageFinished(view: WebView, url: String) {
