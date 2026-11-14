@@ -28,13 +28,14 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.IosShare
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.material.icons.outlined.StarOutline
+import androidx.compose.material.icons.outlined.IosShare
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -92,7 +93,7 @@ fun AppTheme(dark: Boolean = isSystemInDarkTheme(), content: @Composable () -> U
 
 enum class Tab(val label: String, val on: ImageVector, val off: ImageVector) {
     HOME("홈", Icons.Filled.Home, Icons.Outlined.Home),
-    FAVORITES("즐겨찾기", Icons.Filled.Star, Icons.Outlined.StarOutline),
+    EXPORT("내보내기", Icons.Filled.IosShare, Icons.Outlined.IosShare),
     RECENT("최근 본 글", Icons.Outlined.History, Icons.Outlined.History),
     SETTINGS("설정", Icons.Filled.Settings, Icons.Outlined.Settings),
 }
@@ -131,16 +132,10 @@ fun App() {
     LaunchedEffect(Unit) { refresh() }
     if (tab != Tab.HOME) BackHandler { tab = Tab.HOME }
 
-    val favIds = remember(storeVersion) { PostStore.favorites(ctx).all().map { it.id }.toSet() }
-    val toggleFav: (Post) -> Unit = { p ->
-        val store = PostStore.favorites(ctx)
-        if (p.id in favIds) {
-            store.remove(p.id); Toast.makeText(ctx, "즐겨찾기에서 뺐어요", Toast.LENGTH_SHORT).show()
-        } else {
-            store.add(p); Toast.makeText(ctx, "즐겨찾기에 추가했어요", Toast.LENGTH_SHORT).show()
-        }
-        storeVersion++
-    }
+    val favIds = emptySet<String>()
+    // 내보내기(스레드용)로 보낼 글. 글을 길게 누르거나 미리보기에서 '내보내기'
+    var exportPost by remember { mutableStateOf<Post?>(null) }
+    val toExport: (Post) -> Unit = { p -> exportPost = p; tab = Tab.EXPORT }
     // 글 누르면 앱 안에서 모바일 화면 스캔 이미지로 보기
     var preview by remember { mutableStateOf<Post?>(null) }
     val open: (Post) -> Unit = { PostStore.recent(ctx).add(it); storeVersion++; preview = it }
@@ -155,18 +150,16 @@ fun App() {
     ) { pad ->
         Box(Modifier.padding(pad).fillMaxSize()) {
             when (tab) {
-                Tab.HOME -> HomeScreen(feed, error, loading, favIds, ::refresh, open, toggleFav, onBell = { tab = Tab.SETTINGS })
-                Tab.FAVORITES -> SavedScreen(
-                    title = "즐겨찾기",
-                    posts = remember(storeVersion) { PostStore.favorites(ctx).all() },
-                    empty = "아직 즐겨찾기한 글이 없어요.\n홈에서 글을 길게 누르면 추가돼요.",
-                    feed = feed, favIds = favIds, onOpen = open, onLongPress = toggleFav,
+                Tab.HOME -> HomeScreen(feed, error, loading, favIds, ::refresh, open, toExport, onBell = { tab = Tab.SETTINGS })
+                Tab.EXPORT -> ExportTab(
+                    feed = feed, recent = remember(storeVersion) { PostStore.recent(ctx).all() },
+                    selected = exportPost, onSelect = { exportPost = it }, onBack = { exportPost = null },
                 )
                 Tab.RECENT -> SavedScreen(
                     title = "최근 본 글",
                     posts = remember(storeVersion) { PostStore.recent(ctx).all() },
                     empty = "최근에 본 글이 없어요.",
-                    feed = feed, favIds = favIds, onOpen = open, onLongPress = toggleFav,
+                    feed = feed, favIds = favIds, onOpen = open, onLongPress = toExport,
                     action = "기록 지우기" to { PostStore.recent(ctx).clear(); storeVersion++ },
                 )
                 Tab.SETTINGS -> SettingsScreen(feed, onBack = { tab = Tab.HOME })
@@ -178,8 +171,7 @@ fun App() {
         PreviewScreen(
             post = p,
             source = feed?.sourceById?.get(p.source) ?: knownSource(p.source),
-            favorite = p.id in favIds,
-            onToggleFavorite = { toggleFav(p) },
+            onExport = { preview = null; toExport(p) },
             onOpenSite = { openPost(ctx, p) },
             onBack = { preview = null },
         )
