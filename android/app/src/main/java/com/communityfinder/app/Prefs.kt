@@ -39,6 +39,19 @@ class Prefs(ctx: Context) {
         get() = sp.getBoolean("redditLocal", true)
         set(v) = sp.edit().putBoolean("redditLocal", v).apply()
 
+    /** Gemini 번역용 API 키 (사용자가 구글 AI Studio에서 무료 발급). 비어 있으면 휴대폰 내장 번역 */
+    var geminiKey: String
+        get() = sp.getString("geminiKey", "") ?: ""
+        set(v) { sp.edit().putString("geminiKey", v.trim()).putString("geminiModel", "").putLong("geminiCooldown", 0).apply() }
+
+    var geminiModel: String
+        get() = sp.getString("geminiModel", "") ?: ""
+        set(v) = sp.edit().putString("geminiModel", v).apply()
+
+    var geminiCooldownUntil: Long
+        get() = sp.getLong("geminiCooldown", 0)
+        set(v) = sp.edit().putLong("geminiCooldown", v).apply()
+
     var onboardingDone: Boolean
         get() = sp.getBoolean("onboardingDone", false)
         set(v) = sp.edit().putBoolean("onboardingDone", v).apply()

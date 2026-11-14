@@ -40,6 +40,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.launch
 
 private val Lavender = Color(0xFFEDE9FF)
 
@@ -56,6 +57,9 @@ fun SettingsScreen(feed: Feed?, onBack: (() -> Unit)? = null, onSetup: (() -> Un
     var feedUrl by remember { mutableStateOf(prefs.feedUrl) }
     var fmLocal by remember { mutableStateOf(prefs.fmkoreaLocal) }
     var redditLocal by remember { mutableStateOf(prefs.redditLocal) }
+    var geminiKey by remember { mutableStateOf(prefs.geminiKey) }
+    var geminiStatus by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
     var message by remember { mutableStateOf<String?>(null) }
 
     fun apply() {
@@ -191,6 +195,36 @@ fun SettingsScreen(feed: Feed?, onBack: (() -> Unit)? = null, onSetup: (() -> Un
                         }
                         Spacer(Modifier.width(12.dp))
                         PurpleSwitch(fmLocal) { fmLocal = it; prefs.fmkoreaLocal = it }
+                    }
+                }
+
+                // 번역 엔진
+                SettingsCard {
+                    AccentTitle("해외 글 번역 (Gemini 무료 키)")
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "키를 넣으면 밈·속어까지 자연스럽게 번역해요. 무료 한도를 다 쓰면 자동으로 휴대폰 내장 번역으로 바뀌고, 1시간 뒤 다시 Gemini를 써요. 키가 없으면 내장 번역만 써요.",
+                        fontSize = 13.sp, lineHeight = 19.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    OutlinedPillField(geminiKey, { geminiKey = it; prefs.geminiKey = it; geminiStatus = null }, "API 키 붙여넣기 (AIza…)", 50.dp, 13.sp)
+                    Spacer(Modifier.height(10.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(shape = CircleShape, onClick = {
+                            ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://aistudio.google.com/apikey")))
+                        }) { Text("키 발급 페이지", fontWeight = FontWeight.Bold) }
+                        Button(shape = CircleShape, enabled = geminiKey.isNotBlank(), onClick = {
+                            geminiStatus = "확인 중…"
+                            scope.launch {
+                                val r = Gemini.translate(ctx, listOf("This meme is so relatable lol"))
+                                geminiStatus = if (r != null) "✅ 연결됨 (${prefs.geminiModel}) → ${r[0]}" else "⚠ ${Gemini.lastError ?: "실패"}"
+                            }
+                        }) { Text("번역 테스트", fontWeight = FontWeight.Bold) }
+                    }
+                    geminiStatus?.let { Spacer(Modifier.height(8.dp)); Text(it, fontSize = 13.sp, lineHeight = 18.sp) }
+                    if (Gemini.inCooldown(prefs)) {
+                        Spacer(Modifier.height(6.dp))
+                        Text("지금은 무료 한도를 다 써서 휴대폰 내장 번역을 쓰고 있어요.", fontSize = 12.sp, color = MaterialTheme.colorScheme.error)
                     }
                 }
 

@@ -63,7 +63,7 @@ private const val COLLECT_TEXT_JS = """
     if(nodes.length>=500)return;
     var c=root.childNodes;
     for(var i=0;i<c.length&&nodes.length<500;i++){var n=c[i];
-      if(n.nodeType===3){var t=n.nodeValue; if(t&&t.trim().length>1&&/[A-Za-z]{2,}/.test(t)&&t.length<1500){nodes.push(n);texts.push(t);}}
+      if(n.nodeType===3){var t=n.nodeValue; if(t&&t.trim().length>1&&/[A-Za-z]{2,}|[\u3040-\u30ff\u4e00-\u9fff]/.test(t)&&t.length<1500){nodes.push(n);texts.push(t);}}
       else if(n.nodeType===1&&!skip[n.tagName.toUpperCase()]){ if(n.shadowRoot)walk(n.shadowRoot); walk(n); }
     }
   }
@@ -129,6 +129,7 @@ fun PageScanner(post: Post, attempt: Int, onState: (ScanState) -> Unit) {
     val widthPx = with(density) { config.screenWidthDp.dp.roundToPx() }
     val screenHeightPx = with(density) { config.screenHeightDp.dp.roundToPx() }
     val scope = rememberCoroutineScope()
+    val ctx = androidx.compose.ui.platform.LocalContext.current.applicationContext
     var webHeightPx by remember(attempt) { mutableIntStateOf(screenHeightPx) }
     var webView by remember { mutableStateOf<WebView?>(null) }
     var busy by remember(attempt) { mutableStateOf(false) }
@@ -140,18 +141,17 @@ fun PageScanner(post: Post, attempt: Int, onState: (ScanState) -> Unit) {
     suspend fun capture(wv: WebView) {
         if (busy) return
         busy = true
+        val lang = langOf(post.source)
         if (isGlobal(post.source)) {
-            // 해외 글: 페이지의 영어 글자를 한국어로 바꾼 뒤 캡처 (사진 속 글자는 번역되지 않음)
-            onState(ScanState.Loading(88, "한국어로 번역 중"))
+            // 해외 글: 페이지의 외국어 글자를 한국어로 바꾼 뒤 캡처
+            onState(ScanState.Loading(88, "한국어로 번역 중 (${Translator.engineName(ctx)})"))
             delay(800)
-            if (Translator.prepare()) {
-                val raw = eval(wv, COLLECT_TEXT_JS)
-                val texts = runCatching { JSONArray(JSONArray("[$raw]").getString(0)) }.getOrNull()
-                if (texts != null && texts.length() > 0) {
-                    val out = JSONArray()
-                    for (i in 0 until texts.length()) out.put(Translator.translate(texts.getString(i)))
-                    eval(wv, "(function(a){var n=window.__cfNodes||[];for(var i=0;i<n.length&&i<a.length;i++){try{n[i].nodeValue=a[i];}catch(e){}}})($out)")
-                }
+            val raw = eval(wv, COLLECT_TEXT_JS)
+            val arr = runCatching { JSONArray(JSONArray("[$raw]").getString(0)) }.getOrNull()
+            if (arr != null && arr.length() > 0) {
+                val texts = (0 until arr.length()).map { arr.getString(it) }
+                val ko = Translator.translateAll(ctx, texts, lang, "한 웹페이지의 글 조각들이다(제목, 본문, 댓글, 버튼).")
+                eval(wv, "(function(a){var n=window.__cfNodes||[];for(var i=0;i<n.length&&i<a.length;i++){try{n[i].nodeValue=a[i];}catch(e){}}})(${JSONArray(ko)})")
             }
         }
         onState(ScanState.Loading(90, "글 전체 펼치는 중"))
@@ -181,12 +181,12 @@ fun PageScanner(post: Post, attempt: Int, onState: (ScanState) -> Unit) {
             var content = rect(info?.optJSONArray("content"))
             val title = rect(info?.optJSONArray("title"))
             if (content != null && title != null && title.top < content.top) content = Rect(content.left, title.top, content.right, content.bottom)
-            if (isGlobal(post.source) && Translator.prepare()) {
-                // 사진 속 영어 글자도 번역해서 덮어씀 (글자 인식 → 번역 → 다시 그리기)
+            if (isGlobal(post.source)) {
+                // 사진 속 글자도 번역해서 덮어씀 (글자 인식 → 번역 → 다시 그리기)
                 onState(ScanState.Loading(99, "사진 속 글자 번역 중"))
                 runCatching {
                     withContext(Dispatchers.Default) {
-                        ImageTranslator.translateInPlace(bmp, images) { i, n -> onState(ScanState.Loading(99, "사진 속 글자 번역 중 ($i/$n)")) }
+                        ImageTranslator.translateInPlace(ctx, bmp, images, lang) { i, n -> onState(ScanState.Loading(99, "사진 속 글자 번역 중 ($i/$n)")) }
                     }
                 }
             }

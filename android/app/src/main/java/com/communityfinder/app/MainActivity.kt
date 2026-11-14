@@ -137,7 +137,10 @@ fun App() {
     var translating by remember { mutableStateOf(false) }
     LaunchedEffect(feed, tab) {
         val f = feed ?: return@LaunchedEffect
-        if (tab != Tab.GLOBAL || f.posts.none { isGlobal(it.source) && it.id !in titleKo }) return@LaunchedEffect
+        if (tab != Tab.GLOBAL) return@LaunchedEffect
+        val cached = Translator.cachedTitles(ctx) // 엔진(키)이 바뀌면 캐시도 달라짐
+        titleKo = cached
+        if (f.posts.none { isGlobal(it.source) && it.id !in cached }) return@LaunchedEffect
         translating = true
         titleKo = Translator.translateTitles(ctx, f.posts)
         translating = false
@@ -179,7 +182,7 @@ fun App() {
             when (tab) {
                 Tab.HOME -> HomeScreen(feedKr, error, loading, favIds, ::refresh, open, toExport, onBell = { tab = Tab.SETTINGS })
                 Tab.GLOBAL -> HomeScreen(
-                    feedGlobal, if (translating) "제목 번역 중… (처음엔 번역 모델을 받느라 조금 걸려요)" else error,
+                    feedGlobal, if (translating) "제목 번역 중… (${Translator.engineName(ctx)})" else error,
                     loading, favIds, ::refresh, open, toExport, onBell = { tab = Tab.SETTINGS },
                 )
                 Tab.RECENT -> SavedScreen(

@@ -74,6 +74,7 @@ dependencies {
     implementation("org.jsoup:jsoup:1.18.3")
     implementation("com.google.mlkit:translate:17.0.3")
     implementation("com.google.mlkit:text-recognition:16.0.1")
+    implementation("com.google.mlkit:text-recognition-japanese:16.0.1")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20240303")

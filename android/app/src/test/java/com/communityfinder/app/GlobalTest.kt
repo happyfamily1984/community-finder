@@ -8,7 +8,9 @@ import org.junit.Test
 class GlobalTest {
     @Test
     fun regionById() {
-        assertTrue(isGlobal("reddit-funny") && isGlobal("lemmy-memes"))
+        assertTrue(isGlobal("reddit-funny") && isGlobal("lemmy-memes") && isGlobal("jp-hatena"))
+        assertEquals("ja", langOf("jp-hatena")); assertEquals("en", langOf("lemmy-memes"))
+        assertTrue(hasForeignText("猫がかわいい") && hasForeignText("so funny") && !hasForeignText("ㅋㅋ 123"))
         assertFalse(isGlobal("dcinside") || isGlobal("fmkorea"))
     }
 
@@ -42,5 +44,15 @@ class ImagePostTest {
         val html = imagePostHtml("A <b> & \"q\"", "https://i.redd.it/a.jpg?x=1&y=2")
         assertTrue(html.contains("A &lt;b&gt; &amp; &quot;q&quot;"))
         assertTrue(html.contains("src=\"https://i.redd.it/a.jpg?x=1&amp;y=2\""))
+    }
+}
+
+class GeminiTest {
+    @Test
+    fun picksNewestStableFlash() {
+        fun m(n: String, gen: Boolean = true) = """{"name":"models/$n","supportedGenerationMethods":[${if (gen) "\"generateContent\"" else "\"embedContent\""}]}"""
+        val json = """{"models":[${listOf(m("gemini-2.0-flash"), m("gemini-2.5-flash-lite"), m("gemini-2.5-flash"), m("gemini-3.0-flash-preview"),
+            m("gemini-2.5-pro"), m("gemini-2.5-flash-image"), m("text-embedding-004", false)).joinToString(",")}]}"""
+        assertEquals("gemini-2.5-flash", Gemini.pickModel(json))
     }
 }

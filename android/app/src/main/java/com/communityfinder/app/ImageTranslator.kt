@@ -20,17 +20,19 @@ import kotlin.coroutines.resume
  * 전부 휴대폰 안에서 처리 (ML Kit, 무료 · 토큰 없음).
  */
 object ImageTranslator {
-    private val recognizer by lazy { TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS) }
+    private val latin by lazy { TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS) }
+    private val japanese by lazy { TextRecognition.getClient(com.google.mlkit.vision.text.japanese.JapaneseTextRecognizerOptions.Builder().build()) }
     private const val TILE = 2000
 
     /** 번역할 만한 영어인지: 4글자 이상 단어가 있거나 2글자 이상 단어가 2개 이상 */
     fun worthTranslating(text: String): Boolean {
+        if (Regex("[\\u3040-\\u30ff\\u4e00-\\u9fff]").containsMatchIn(text)) return true
         val words = Regex("[A-Za-z]{2,}").findAll(text).map { it.value }.toList()
         return words.any { it.length >= 4 } || words.size >= 2
     }
 
     /** bitmap 위에 직접 그림. regions가 비면 전체를 세로로 나눠 처리. 반환: 번역해 넣은 글 덩어리 수 */
-    suspend fun translateInPlace(bmp: Bitmap, regions: List<Rect>, onProgress: (Int, Int) -> Unit = { _, _ -> }): Int {
+    suspend fun translateInPlace(ctx: android.content.Context, bmp: Bitmap, regions: List<Rect>, lang: String, onProgress: (Int, Int) -> Unit = { _, _ -> }): Int {
         val full = Rect(0, 0, bmp.width, bmp.height)
         val targets = regions.mapNotNull { r -> Rect(r).takeIf { it.intersect(full) && it.width() > 80 && it.height() > 40 } }
             .flatMap { r -> tiles(r) }
@@ -41,17 +43,22 @@ object ImageTranslator {
             onProgress(i + 1, targets.size)
             val crop = Bitmap.createBitmap(bmp, r.left, r.top, r.width(), r.height())
             val text = suspendCancellableCoroutine { c ->
-                recognizer.process(InputImage.fromBitmap(crop, 0))
+                (if (lang == "ja") japanese else latin).process(InputImage.fromBitmap(crop, 0))
                     .addOnSuccessListener { c.resume(it) }.addOnFailureListener { c.resume(null) }
             }
             crop.recycle()
-            text?.textBlocks?.forEach { block ->
-                val bb = block.boundingBox ?: return@forEach
-                val src = block.text.replace('\n', ' ').trim()
-                if (bb.height() < 14 || !worthTranslating(src)) return@forEach
-                val ko = Translator.translate(src)
-                if (ko == src || ko.isBlank()) return@forEach
-                val box = Rect(bb).apply { offset(r.left, r.top) }
+            // 같은 사진 안의 글 덩어리를 한 번에 번역 (문맥이 이어지도록)
+            val blocks = text?.textBlocks.orEmpty().filter { b ->
+                val bb = b.boundingBox
+                bb != null && bb.height() >= 14 && worthTranslating(b.text)
+            }
+            if (blocks.isEmpty()) return@forEachIndexed
+            val srcs = blocks.map { it.text.replace('\n', ' ').trim() }
+            val kos = Translator.translateAll(ctx, srcs, lang, "한 장의 밈/짤 이미지 안에 있는 글 덩어리들이라 문맥이 서로 이어진다. 위에서 아래 순서다.")
+            blocks.forEachIndexed { bi, block ->
+                val ko = kos[bi]
+                if (ko == srcs[bi] || ko.isBlank()) return@forEachIndexed
+                val box = Rect(block.boundingBox!!).apply { offset(r.left, r.top) }
                 val bg = borderColor(bmp, box)
                 // 줄마다 원래 글자를 배경색으로 덮음
                 val fill = Paint().apply { color = bg }
