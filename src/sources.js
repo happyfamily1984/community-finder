@@ -8,7 +8,7 @@
 //   keepParams : 글 주소에서 남길 쿼리 파라미터 (나머지는 제거 → 같은 글이 순위가 바뀌어도 같은 id)
 //   titleStrip : 제목에서 지울 패턴 (정규식)
 //   disabled : true면 수집 안 함
-import { fetchReddit, fetchLemmy } from './global.js';
+import { fetchReddit, fetchLemmy, fetchRss } from './global.js';
 
 export const SOURCES = [
   {
@@ -125,6 +125,12 @@ export const SOURCES = [
   { id: 'lemmy-memes', name: 'Lemmy memes', board: '오늘의 인기', url: 'https://lemmy.world/c/memes', color: '#00a846', host: 'lemmy.world', community: 'memes', fetch: fetchLemmy },
   { id: 'lemmy-shitpost', name: 'Lemmy shitpost', board: '오늘의 인기', url: 'https://lemmy.world/c/lemmyshitpost', color: '#1b8f5a', host: 'lemmy.world', community: 'lemmyshitpost', fetch: fetchLemmy },
   { id: 'lemmy-funny', name: 'Lemmy funny', board: '오늘의 인기', url: 'https://lemmy.world/c/funny', color: '#3aa76d', host: 'lemmy.world', community: 'funny', fetch: fetchLemmy },
+  // ---- 일본 유머 (id가 jp- 로 시작하면 앱에서 '해외' 탭 + 일본어 번역 대상) ----
+  { id: 'jp-hatena', name: '하테나 북마크', board: '재미 인기글', url: 'https://b.hatena.ne.jp/hotentry/fun', color: '#00a4de', feed: 'https://b.hatena.ne.jp/hotentry/fun.rss', fetch: fetchRss },
+  { id: 'jp-nwknews', name: '철학뉴스', board: '5ch 마토메', url: 'http://blog.livedoor.jp/nwknews/', color: '#7a5c3e', feed: 'http://blog.livedoor.jp/nwknews/index.rdf', fetch: fetchRss },
+  { id: 'jp-himasoku', name: '히마진 속보', board: '5ch 마토메', url: 'http://himasoku.com/', color: '#e67e22', feed: 'http://himasoku.com/index.rdf', fetch: fetchRss },
+  { id: 'jp-alfalfa', name: '알팔파 모자이크', board: '5ch 마토메', url: 'http://alfalfalfa.com/', color: '#8e44ad', feed: 'http://alfalfalfa.com/index.rdf', fetch: fetchRss },
+  { id: 'jp-vipper', name: 'VIPPER', board: '5ch 마토메', url: 'http://blog.livedoor.jp/news23vip/', color: '#c0392b', feed: 'http://blog.livedoor.jp/news23vip/index.rdf', fetch: fetchRss },
 ];
 
 export const ACTIVE_SOURCES = SOURCES.filter((s) => !s.disabled);

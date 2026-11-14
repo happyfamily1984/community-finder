@@ -1,4 +1,6 @@
-// 해외 유머 커뮤니티 수집 (공개 JSON API 사용)
+// 해외 유머 커뮤니티 수집 (공개 JSON API / RSS 사용)
+import * as cheerio from 'cheerio';
+import { fetchHtml } from './fetcher.js';
 const UA = 'android:com.communityfinder.app:v1 (personal feed reader)';
 
 async function getJson(url) {
@@ -49,4 +51,26 @@ export async function fetchLemmy(source) {
       // 사진이 본문인 글이면 원본 사진 주소 (앱이 사이트 화면 대신 사진만 깔끔하게 보여줌)
       image: isImageUrl(p.post.url, p.post.url_content_type) ? p.post.url : null,
     }));
+}
+
+// RSS / RDF 피드 (일본 마토메 사이트, 하테나 북마크 등). 북마크 수가 있으면 추천수로 사용
+export function parseRss(xml, source) {
+  const $ = cheerio.load(xml, { xmlMode: true });
+  const out = [];
+  $('item, entry').each((i, el) => {
+    const it = $(el);
+    const title = it.children('title').first().text().replace(/\s+/g, ' ').trim();
+    const link = it.children('link').first().text().trim() || it.children('link').first().attr('href') || it.attr('rdf:about');
+    if (!title || !/^https?:\/\//.test(link || '') || /^(PR|AD)[:：\s]/i.test(title)) return;
+    const bm = parseInt(it.children('hatena\\:bookmarkcount').first().text(), 10);
+    out.push({
+      id: `${source.id}:${link}`, source: source.id, title, url: link,
+      views: null, comments: null, likes: Number.isFinite(bm) ? bm : null,
+    });
+  });
+  return out.slice(0, 30);
+}
+
+export async function fetchRss(source) {
+  return parseRss(await fetchHtml(source.feed), source);
 }

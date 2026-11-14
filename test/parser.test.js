@@ -52,3 +52,13 @@ test('해외: 사진 주소 판별', async () => {
   assert.equal(isImageUrl('https://example.com/article', 'text/html'), false);
   assert.equal(isImageUrl('http://insecure.com/a.png', null), false);
 });
+
+test('RSS/RDF 파싱: 북마크 수, 광고 제외', async () => {
+  const { parseRss } = await import('../src/global.js');
+  const xml = `<?xml version="1.0"?><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:hatena="http://www.hatena.ne.jp/info/xmlns#">
+    <item rdf:about="https://a.jp/1"><title>猫が  かわいい</title><link>https://a.jp/1</link><hatena:bookmarkcount>321</hatena:bookmarkcount></item>
+    <item><title>PR: 広告</title><link>https://ad.jp/x</link></item>
+    <item rdf:about="https://a.jp/2"><title>犬</title><link>https://a.jp/2</link></item></rdf:RDF>`;
+  const posts = parseRss(xml, { id: 'jp-test' });
+  assert.deepEqual(posts.map((p) => [p.id, p.title, p.likes]), [['jp-test:https://a.jp/1', '猫が かわいい', 321], ['jp-test:https://a.jp/2', '犬', null]]);
+});
