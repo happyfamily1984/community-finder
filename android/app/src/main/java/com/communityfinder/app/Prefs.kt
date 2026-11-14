@@ -29,6 +29,11 @@ class Prefs(ctx: Context) {
         get() = sp.getInt("interval", 15)
         set(v) = sp.edit().putInt("interval", v).apply()
 
+    /** 에펨코리아를 휴대폰에서 직접 가져오기 (클라우드 수집이 막혀 있어서) */
+    var fmkoreaLocal: Boolean
+        get() = sp.getBoolean("fmkoreaLocal", true)
+        set(v) = sp.edit().putBoolean("fmkoreaLocal", v).apply()
+
     var feedUrl: String
         get() = sp.getString("feedUrl", null)?.takeIf { it.isNotBlank() } ?: BuildConfig.FEED_URL
         set(v) = sp.edit().putString("feedUrl", v.trim()).apply()

@@ -100,13 +100,27 @@ object FeedRepository {
             val text = conn.inputStream.bufferedReader().use { it.readText() }
             val feed = Feed.parse(text)
             cacheFile(ctx).writeText(text)
-            feed
+            withLocalSources(ctx, feed)
         } finally {
             conn.disconnect()
         }
     }
 
-    fun cached(ctx: Context): Feed? = runCatching { Feed.parse(cacheFile(ctx).readText()) }.getOrNull()
+    fun cached(ctx: Context): Feed? =
+        runCatching { Feed.parse(cacheFile(ctx).readText()) }.getOrNull()?.let { withLocalSources(ctx, it, network = false) }
+
+    /** 클라우드에서 막힌 커뮤니티(에펨코리아)를 휴대폰에서 직접 가져와 합침 */
+    private fun withLocalSources(ctx: Context, feed: Feed, network: Boolean = true): Feed {
+        if (!Prefs(ctx).fmkoreaLocal) return feed
+        // 화면을 처음 열 때(network=false)는 저장해 둔 결과만 즉시 표시
+        val (src, posts) = if (network) FmkoreaLocal.load(ctx) else FmkoreaLocal.cachedOnly(ctx)
+        return merge(feed, src, posts)
+    }
+
+    fun merge(feed: Feed, src: Source, posts: List<Post>): Feed = feed.copy(
+        sources = feed.sources.filter { it.id != src.id } + src,
+        posts = feed.posts.filter { it.source != src.id } + posts,
+    )
 }
 
 /** 알림 조건: 선택한 커뮤니티의 새 글 중 (화제도 >= 기준) 또는 (제목에 키워드 포함) */

@@ -274,6 +274,7 @@ fun SettingsScreen(feed: Feed?, onBack: () -> Unit) {
     var muted by remember { mutableStateOf(prefs.mutedSources) }
     var interval by remember { mutableIntStateOf(prefs.intervalMin) }
     var feedUrl by remember { mutableStateOf(prefs.feedUrl) }
+    var fmLocal by remember { mutableStateOf(prefs.fmkoreaLocal) }
     var message by remember { mutableStateOf<String?>(null) }
 
     fun apply() {
@@ -352,6 +353,19 @@ fun SettingsScreen(feed: Feed?, onBack: () -> Unit) {
                     Text("${s.name} · ${s.board}")
                 }
             } ?: Text("피드를 받은 뒤에 선택할 수 있어요", color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+            HorizontalDivider()
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("에펨코리아 휴대폰에서 가져오기", fontWeight = FontWeight.SemiBold)
+                    Text(
+                        "에펨코리아는 클라우드 서버 접근을 막아서, 이 휴대폰에서 15분에 한 번 포텐 목록만 받아와요. " +
+                            "에펨코리아가 접근을 제한하면 알려준 시간만큼 쉬었다가 다시 시도해요.",
+                        fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(checked = fmLocal, onCheckedChange = { fmLocal = it; prefs.fmkoreaLocal = it })
+            }
 
             Text("확인 주기", fontWeight = FontWeight.SemiBold)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
