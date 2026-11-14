@@ -99,10 +99,12 @@ val BODY_SELECTORS = mapOf(
     "jp" to ".article-body, .entry-content, .article-body-inner, #article-body, .entry-body, article",
 )
 
-/** 캡처 전에 광고 영역을 숨김 */
+/** 캡처 전에 광고와 댓글 영역을 숨김 */
 private const val HIDE_ADS_JS = """
 (function(){try{
   document.querySelectorAll('ins.adsbygoogle,iframe:not([src*="youtube"]):not([src*="youtu.be"]),[id^="google_ads"],[id^="div-gpt-ad"],[class*="adsbygoogle"],[class*="coupang"],[id*="coupang"],a[href*="coupang.com"],a[href*="link.coupang"]').forEach(function(e){e.style.setProperty('display','none','important');});
+  // 댓글 영역 숨김 (본문만 보이게)
+  document.querySelectorAll('#comment,#comments,#cmtPosition,#cmt_list,.fdb_lst_wrp,.fdb_lst_ul,#fdb_lst,.comment_wrap,.comment-wrap,.comment_box,.comment-box,.all-comment,.all-comment-lst,.view_comment,.comment_view,.post_comment,.comment_list,.comment-list,.cmt_list,.cmt_area,.reply_list,.reply-list,.reply-wrap,.replylist,.comment_container,.comments,[id^="comment_"],[class*="comment_list"],[class*="commentList"]').forEach(function(e){e.style.setProperty('display','none','important');});
 }catch(x){}})()
 """
 
