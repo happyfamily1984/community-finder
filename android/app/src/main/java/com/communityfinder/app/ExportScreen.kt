@@ -52,7 +52,7 @@ fun ExportDetail(post: Post, source: Source?, onBack: () -> Unit) {
     var showAutoHelp by remember { mutableStateOf(false) }
 
     if (showAutoHelp) {
-        val send = { showAutoHelp = false; result?.files?.let { ThreadsKit.shareToThreads(ctx, it, review + "\n\n" + ThreadsKit.sourceLine(sourceName)) }; Unit }
+        val send = { showAutoHelp = false; result?.files?.let { ThreadsKit.shareToThreads(ctx, it, review + "\n\n" + ThreadsKit.sourceLine(post.source, sourceName)) }; Unit }
         AlertDialog(
             onDismissRequest = { showAutoHelp = false },
             title = { Text("자동 입력 켜기") },
@@ -99,7 +99,7 @@ fun ExportDetail(post: Post, source: Source?, onBack: () -> Unit) {
             ScanStatus(scan, onRetry = { attempt++ }) {
                 Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     CopyCard("제목", post.title) { ThreadsKit.copy(ctx, "제목", post.title) }
-                    CopyCard("출처", ThreadsKit.sourceLine(sourceName)) { ThreadsKit.copy(ctx, "출처", ThreadsKit.sourceLine(sourceName)) }
+                    CopyCard("커뮤니티", ThreadsKit.sourceLine(post.source, sourceName)) { ThreadsKit.copy(ctx, "커뮤니티", ThreadsKit.sourceLine(post.source, sourceName)) }
 
                     // 분할 이미지
                     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer), shape = RoundedCornerShape(18.dp)) {
@@ -163,7 +163,7 @@ fun ExportDetail(post: Post, source: Source?, onBack: () -> Unit) {
             ) { Text("갤러리 저장") }
             GradientButton("스레드에 올리기", null, onClick = {
                 if (files != null) {
-                    val body = review + "\n\n" + ThreadsKit.sourceLine(sourceName)
+                    val body = review + "\n\n" + ThreadsKit.sourceLine(post.source, sourceName)
                     ThreadsKit.copy(ctx, "본문", body) // 자동 입력이 안 되면 붙여넣기만 하면 되도록
                     if (ThreadsAuto.isEnabled(ctx)) ThreadsAuto.start(body) else showAutoHelp = true
                     if (!showAutoHelp) ThreadsKit.shareToThreads(ctx, files, body)

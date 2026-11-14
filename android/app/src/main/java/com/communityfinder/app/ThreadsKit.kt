@@ -122,7 +122,20 @@ object ThreadsKit {
         return if (c.intersect(full) && c.height() >= 100) c else full
     }
 
-    fun sourceLine(sourceName: String) = "출처 : $sourceName"
+    /** 스레드 본문에 붙일 커뮤니티 이름 ("출처 :" 없이 짧게) */
+    fun sourceLine(sourceId: String, sourceName: String) = when {
+        sourceId == "dcinside" -> "디시"
+        sourceId == "theqoo" -> "더쿠"
+        sourceId == "fmkorea" -> "펨코"
+        sourceId == "ruliweb" -> "루리웹"
+        sourceId == "clien" -> "클리앙"
+        sourceId == "natepann" -> "네이트판"
+        sourceId == "bobaedream" -> "보배"
+        sourceId.startsWith("reddit") -> "레딧"
+        sourceId.startsWith("lemmy") -> "해외 커뮤"
+        sourceId.startsWith("jp-") -> "일본 커뮤"
+        else -> sourceName
+    }
 
     // ---------- 감상평 예시 (휴대폰 안에서 규칙으로 생성 · AI/토큰 사용 안 함) ----------
 

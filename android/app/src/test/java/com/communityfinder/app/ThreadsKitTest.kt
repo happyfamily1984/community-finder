@@ -9,7 +9,10 @@ class ThreadsKitTest {
     private val post = Post("a:1", "natepann", "이혼 직전에 부부상담 받아본 후기", "u", 26268, 120, 38, 84, 0, 0)
 
     @Test
-    fun sourceLineFormat() = assertEquals("출처 : 네이트판", ThreadsKit.sourceLine("네이트판"))
+    fun sourceLineFormat() {
+        assertEquals("디시", ThreadsKit.sourceLine("dcinside", "디시인사이드"))
+        assertEquals("네이트판", ThreadsKit.sourceLine("natepann", "네이트판"))
+    }
 
     @Test
     fun moodFromKeywords() {
