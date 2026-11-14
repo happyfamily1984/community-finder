@@ -9,8 +9,8 @@ async function getJson(url) {
 
 export function isImageUrl(url, contentType) {
   if (!url || !/^https:\/\//.test(url)) return false;
-  if (contentType) return /^image\/(jpeg|png|webp|gif)/.test(contentType);
-  return /\.(jpe?g|png|webp|gif)(\?.*)?$/i.test(url);
+  if (contentType && /^image\//.test(contentType)) return true;
+  return /\.(jpe?g|png|webp|gif|avif)(\?.*)?$/i.test(url) || /\/pictrs\/image\//.test(url);
 }
 
 // Reddit: 오늘의 인기글 (성인/고정글 제외)
@@ -34,6 +34,8 @@ export async function fetchReddit(source) {
 // Lemmy: 오늘의 인기글 (성인글 제외)
 export async function fetchLemmy(source) {
   const json = await getJson(`https://${source.host}/api/v3/post/list?community_name=${encodeURIComponent(source.community)}&sort=TopDay&limit=30`);
+  const p0 = json.posts[0]?.post;
+  if (p0) console.log(`[lemmy 샘플] url=${p0.url} type=${p0.url_content_type} thumb=${p0.thumbnail_url}`);
   return json.posts
     .filter((p) => !p.post.nsfw && !p.post.deleted && !p.post.removed)
     .map((p) => ({
