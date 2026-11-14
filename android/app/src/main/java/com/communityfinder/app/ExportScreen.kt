@@ -6,6 +6,9 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -47,12 +50,13 @@ fun ExportDetail(post: Post, source: Source?, onBack: () -> Unit) {
     var scan by remember(attempt) { mutableStateOf<ScanState>(ScanState.Loading(0, "페이지 여는 중")) }
     var mosaicOn by remember { mutableStateOf(true) }
     var result by remember { mutableStateOf<ExportResult?>(null) }
-    var variant by remember { mutableIntStateOf(0) }
-    var review by remember { mutableStateOf("") }
+    // 스레드 본문: 제목 + 커뮤니티 이름만 (감상평 없음)
+    val review = post.title + "\n\n" + ThreadsKit.sourceLine(post.source, sourceName)
+    var zoomIndex by remember { mutableStateOf<Int?>(null) }
     var showAutoHelp by remember { mutableStateOf(false) }
 
     if (showAutoHelp) {
-        val send = { showAutoHelp = false; result?.files?.let { ThreadsKit.shareToThreads(ctx, it, review + "\n\n" + ThreadsKit.sourceLine(post.source, sourceName)) }; Unit }
+        val send = { showAutoHelp = false; result?.files?.let { ThreadsKit.shareToThreads(ctx, it, review) }; Unit }
         AlertDialog(
             onDismissRequest = { showAutoHelp = false },
             title = { Text("자동 입력 켜기") },
@@ -86,7 +90,29 @@ fun ExportDetail(post: Post, source: Source?, onBack: () -> Unit) {
             val pieces = ThreadsKit.split(body, done.imageRects.map { (it.top - c.top)..(it.bottom - c.top) })
             ExportResult(pieces, ThreadsKit.writeCache(ctx, post.id, pieces), done.text)
         }
-        if (review.isEmpty()) review = ThreadsKit.review(post, done.text, variant)
+    }
+
+    // 사진을 누르면 전체 화면 미리보기 (좌우로 넘기기, 긴 사진은 위아래 스크롤, 누르면 닫힘)
+    val pieces = result?.pieces.orEmpty()
+    zoomIndex?.let { start ->
+        if (pieces.isNotEmpty()) {
+            androidx.compose.ui.window.Dialog(
+                onDismissRequest = { zoomIndex = null },
+                properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
+            ) {
+                val pager = rememberPagerState(initialPage = start.coerceIn(0, pieces.size - 1)) { pieces.size }
+                Box(Modifier.fillMaxSize().background(Color.Black)) {
+                    HorizontalPager(pager, Modifier.fillMaxSize()) { page ->
+                        val img = remember(pieces[page]) { pieces[page].asImageBitmap() }
+                        Box(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).clickable { zoomIndex = null }, contentAlignment = Alignment.Center) {
+                            Image(img, "이미지 ${page + 1}", contentScale = ContentScale.FillWidth, modifier = Modifier.fillMaxWidth())
+                        }
+                    }
+                    Text("${pager.currentPage + 1} / ${pieces.size}", color = Color.White, fontWeight = FontWeight.Bold,
+                        modifier = Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = 12.dp).background(Color(0x99000000), CircleShape).padding(horizontal = 12.dp, vertical = 4.dp))
+                }
+            }
+        }
     }
 
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
@@ -117,7 +143,7 @@ fun ExportDetail(post: Post, source: Source?, onBack: () -> Unit) {
                                     Box {
                                         val img = remember(b) { b.asImageBitmap() }
                                         Image(img, "이미지 ${i + 1}", contentScale = ContentScale.FillWidth,
-                                            modifier = Modifier.width(w).clip(RoundedCornerShape(10.dp)).border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(10.dp)))
+                                            modifier = Modifier.width(w).clip(RoundedCornerShape(10.dp)).clickable { zoomIndex = i }.border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(10.dp)))
                                         Text("${i + 1}/${result?.pieces?.size}", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold,
                                             modifier = Modifier.padding(6.dp).background(Color(0x99000000), CircleShape).padding(horizontal = 8.dp, vertical = 2.dp))
                                     }
@@ -127,21 +153,12 @@ fun ExportDetail(post: Post, source: Source?, onBack: () -> Unit) {
                         }
                     }
 
-                    // 감상평 예시
+                    // 스레드에 들어갈 글 (자동 입력됨)
                     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer), shape = RoundedCornerShape(18.dp)) {
-                        Column(Modifier.padding(16.dp)) {
-                            Text("감상평 예시 (스레드 본문용)", fontWeight = FontWeight.ExtraBold, fontSize = 16.sp)
-                            Spacer(Modifier.height(8.dp))
-                            OutlinedTextField(review, { review = it }, Modifier.fillMaxWidth(), textStyle = LocalTextStyle.current.copy(fontSize = 14.sp, lineHeight = 20.sp))
-                            Spacer(Modifier.height(8.dp))
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                OutlinedButton(onClick = { variant++; review = ThreadsKit.review(post, done?.text.orEmpty(), variant) }) {
-                                    Icon(Icons.Filled.Refresh, null, Modifier.size(18.dp)); Spacer(Modifier.width(4.dp)); Text("다른 예시")
-                                }
-                                Button(onClick = { ThreadsKit.copy(ctx, "감상평", review) }) {
-                                    Icon(Icons.Filled.ContentCopy, null, Modifier.size(18.dp)); Spacer(Modifier.width(4.dp)); Text("복사하기")
-                                }
-                            }
+                        Column(Modifier.fillMaxWidth().padding(16.dp)) {
+                            Text("스레드에 들어갈 글", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                            Spacer(Modifier.height(4.dp))
+                            Text(review, fontSize = 15.sp, lineHeight = 21.sp)
                         }
                     }
                     Spacer(Modifier.height(4.dp))
@@ -163,7 +180,7 @@ fun ExportDetail(post: Post, source: Source?, onBack: () -> Unit) {
             ) { Text("갤러리 저장") }
             GradientButton("스레드에 올리기", null, onClick = {
                 if (files != null) {
-                    val body = review + "\n\n" + ThreadsKit.sourceLine(post.source, sourceName)
+                    val body = review
                     ThreadsKit.copy(ctx, "본문", body) // 자동 입력이 안 되면 붙여넣기만 하면 되도록
                     if (ThreadsAuto.isEnabled(ctx)) ThreadsAuto.start(body) else showAutoHelp = true
                     if (!showAutoHelp) ThreadsKit.shareToThreads(ctx, files, body)
