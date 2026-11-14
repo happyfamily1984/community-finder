@@ -45,7 +45,7 @@ private val Lavender = Color(0xFFEDE9FF)
 
 /** 설정 화면 (디자인 시안: 카드형 섹션 + 3D 종 일러스트) */
 @Composable
-fun SettingsScreen(feed: Feed?, onBack: (() -> Unit)? = null) {
+fun SettingsScreen(feed: Feed?, onBack: (() -> Unit)? = null, onSetup: (() -> Unit)? = null) {
     val ctx = LocalContext.current
     val prefs = remember { Prefs(ctx) }
     var enabled by remember { mutableStateOf(prefs.notifyEnabled && HotPostWorker.canNotify(ctx)) }
@@ -224,6 +224,16 @@ fun SettingsScreen(feed: Feed?, onBack: (() -> Unit)? = null) {
                             Spacer(Modifier.width(6.dp))
                             Text("테스트 알림 보내기", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, fontSize = 15.sp)
                         }
+                    }
+                }
+
+                if (onSetup != null) {
+                    SettingsCard {
+                        AccentTitle("처음 설정 다시 보기")
+                        Spacer(Modifier.height(8.dp))
+                        Text("알림 · 배터리 · 스레드 자동 입력(접근성) 설정을 순서대로 안내해요.", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Spacer(Modifier.height(10.dp))
+                        OutlinedButton(onClick = onSetup, shape = CircleShape) { Text("설정 안내 열기", fontWeight = FontWeight.Bold) }
                     }
                 }
 

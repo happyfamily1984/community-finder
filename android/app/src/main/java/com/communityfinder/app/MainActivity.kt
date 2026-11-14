@@ -143,6 +143,12 @@ fun App() {
     if (preview != null) BackHandler { preview = null }
 
 
+    var onboarding by remember { mutableStateOf(!Prefs(ctx).onboardingDone) }
+    if (onboarding) {
+        OnboardingScreen { onboarding = false }
+        return
+    }
+
     Box(Modifier.fillMaxSize()) {
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -162,7 +168,7 @@ fun App() {
                     feed = feed, favIds = favIds, onOpen = open, onLongPress = toExport,
                     action = "기록 지우기" to { PostStore.recent(ctx).clear(); storeVersion++ },
                 )
-                Tab.SETTINGS -> SettingsScreen(feed, onBack = { tab = Tab.HOME })
+                Tab.SETTINGS -> SettingsScreen(feed, onBack = { tab = Tab.HOME }, onSetup = { onboarding = true })
             }
         }
     }

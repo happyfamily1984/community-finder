@@ -34,6 +34,10 @@ class Prefs(ctx: Context) {
         get() = sp.getBoolean("fmkoreaLocal", true)
         set(v) = sp.edit().putBoolean("fmkoreaLocal", v).apply()
 
+    var onboardingDone: Boolean
+        get() = sp.getBoolean("onboardingDone", false)
+        set(v) = sp.edit().putBoolean("onboardingDone", v).apply()
+
     var feedUrl: String
         get() = sp.getString("feedUrl", null)?.takeIf { it.isNotBlank() } ?: BuildConfig.FEED_URL
         set(v) = sp.edit().putString("feedUrl", v.trim()).apply()
