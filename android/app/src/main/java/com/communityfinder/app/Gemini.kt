@@ -31,7 +31,7 @@ object Gemini {
     private fun request(method: String, url: String, key: String, body: String? = null): Pair<Int, String> {
         val conn = URL(url).openConnection() as HttpURLConnection
         conn.requestMethod = method
-        conn.connectTimeout = 15000; conn.readTimeout = 60000
+        conn.connectTimeout = 10000; conn.readTimeout = 30000
         conn.setRequestProperty("x-goog-api-key", key)
         try {
             if (body != null) {
@@ -46,6 +46,10 @@ object Gemini {
             conn.disconnect()
         }
     }
+
+    /** 구글이 돌려준 오류 설명 (원인 파악용) */
+    private fun errorMessage(body: String) =
+        runCatching { JSONObject(body).getJSONObject("error").getString("message") }.getOrDefault(body).take(160)
 
     /** 키로 쓸 수 있는 모델 중 가장 최신 flash 모델 선택 (모델 이름이 바뀌어도 동작하도록) */
     fun pickModel(listJson: String): String? {
@@ -63,7 +67,7 @@ object Gemini {
     private fun model(prefs: Prefs): String? {
         prefs.geminiModel.takeIf { it.isNotBlank() }?.let { return it }
         val (code, text) = request("GET", "$BASE/models?pageSize=200", prefs.geminiKey)
-        if (code != 200) { lastError = "모델 목록 HTTP $code"; return null }
+        if (code != 200) { lastError = "모델 목록 HTTP $code: ${errorMessage(text)}"; return null }
         return pickModel(text)?.also { prefs.geminiModel = it }
     }
 
@@ -88,8 +92,7 @@ object Gemini {
                         return@runCatching null
                     }
                     code == 404 -> { prefs.geminiModel = ""; lastError = "모델을 찾지 못함 ($model)"; return@runCatching null }
-                    code == 400 || code == 401 || code == 403 -> { lastError = "API 키가 올바르지 않아요 (HTTP $code)"; return@runCatching null }
-                    code != 200 -> { lastError = "HTTP $code"; return@runCatching null }
+                    code != 200 -> { lastError = "HTTP $code ($model): ${errorMessage(text)}"; return@runCatching null }
                 }
                 val parts = JSONObject(text).optJSONArray("candidates")?.optJSONObject(0)?.optJSONObject("content")?.optJSONArray("parts")
                 val joined = parts?.let { p -> (0 until p.length()).joinToString("") { p.getJSONObject(it).optString("text") } }.orEmpty()
@@ -99,6 +102,6 @@ object Gemini {
             }
             lastError = null
             out as List<String>
-        }.getOrElse { lastError = it.message ?: "연결 실패"; null }
+        }.getOrElse { lastError = if (it is java.net.SocketTimeoutException) "응답이 너무 늦어요 (30초 초과, ${prefs.geminiModel})" else (it.message ?: "연결 실패"); null }
     }
 }
