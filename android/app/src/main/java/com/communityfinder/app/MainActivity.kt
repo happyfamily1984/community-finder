@@ -161,7 +161,7 @@ fun App() {
                     feed = feed, favIds = favIds, onOpen = open, onLongPress = toggleFav,
                     action = "기록 지우기" to { PostStore.recent(ctx).clear(); storeVersion++ },
                 )
-                Tab.SETTINGS -> SettingsScreen(feed)
+                Tab.SETTINGS -> SettingsScreen(feed, onBack = { tab = Tab.HOME })
             }
         }
     }
