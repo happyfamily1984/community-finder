@@ -36,13 +36,18 @@ class Prefs(ctx: Context) {
 
     /** Reddit을 휴대폰에서 직접 가져오기 (클라우드 수집이 막혀 있어서) */
     var redditLocal: Boolean
-        get() = sp.getBoolean("redditLocal", true)
+        get() = sp.getBoolean("redditLocal", false)
         set(v) = sp.edit().putBoolean("redditLocal", v).apply()
 
     /** Gemini 번역용 API 키 (사용자가 구글 AI Studio에서 무료 발급). 비어 있으면 휴대폰 내장 번역 */
     var geminiKey: String
         get() = sp.getString("geminiKey", "") ?: ""
-        set(v) { sp.edit().putString("geminiKey", v.trim()).putString("geminiModel", "").putLong("geminiCooldown", 0).apply() }
+        set(v) { sp.edit().putString("geminiKey", v.trim()).putString("geminiModel", "").putString("geminiModels", "").putLong("geminiCooldown", 0).apply() }
+
+    /** 시도할 Gemini 모델 후보 (쉼표 구분) */
+    var geminiModels: String
+        get() = sp.getString("geminiModels", "") ?: ""
+        set(v) = sp.edit().putString("geminiModels", v).apply()
 
     var geminiModel: String
         get() = sp.getString("geminiModel", "") ?: ""

@@ -54,6 +54,7 @@ class GeminiTest {
         val json = """{"models":[${listOf(m("gemini-2.0-flash"), m("gemini-2.5-flash-lite"), m("gemini-2.5-flash"), m("gemini-3.0-flash-preview"),
             m("gemini-2.5-pro"), m("gemini-2.5-flash-image"), m("text-embedding-004", false)).joinToString(",")}]}"""
         assertEquals("gemini-2.5-flash", Gemini.pickModel(json))
+        assertEquals(listOf("gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.0-flash", "gemini-3.0-flash-preview"), Gemini.rankModels(json))
     }
 }
 

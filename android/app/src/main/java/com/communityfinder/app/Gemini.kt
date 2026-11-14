@@ -51,9 +51,9 @@ object Gemini {
     private fun errorMessage(body: String) =
         runCatching { JSONObject(body).getJSONObject("error").getString("message") }.getOrDefault(body).take(160)
 
-    /** 키로 쓸 수 있는 모델 중 가장 최신 flash 모델 선택 (모델 이름이 바뀌어도 동작하도록) */
-    fun pickModel(listJson: String): String? {
-        val models = JSONObject(listJson).optJSONArray("models") ?: return null
+    /** 키로 쓸 수 있는 flash 모델들을 선호 순서대로 (정식 > 미리보기, 최신 버전 우선, 일반 > lite) */
+    fun rankModels(listJson: String): List<String> {
+        val models = JSONObject(listJson).optJSONArray("models") ?: return emptyList()
         val names = (0 until models.length()).map { models.getJSONObject(it) }
             .filter { m -> m.optJSONArray("supportedGenerationMethods")?.let { a -> (0 until a.length()).any { a.getString(it) == "generateContent" } } == true }
             .map { it.getString("name").removePrefix("models/") }
@@ -61,47 +61,65 @@ object Gemini {
         fun version(n: String) = Regex("gemini-(\\d+(?:\\.\\d+)?)").find(n)?.groupValues?.get(1)?.toDoubleOrNull() ?: 0.0
         return names.sortedWith(
             compareByDescending<String> { !it.contains("preview") }.thenByDescending { version(it) }.thenByDescending { !it.contains("lite") }.thenBy { it.length },
-        ).firstOrNull()
+        )
     }
 
-    private fun model(prefs: Prefs): String? {
-        prefs.geminiModel.takeIf { it.isNotBlank() }?.let { return it }
-        val (code, text) = request("GET", "$BASE/models?pageSize=200", prefs.geminiKey)
-        if (code != 200) { lastError = "모델 목록 HTTP $code: ${errorMessage(text)}"; return null }
-        return pickModel(text)?.also { prefs.geminiModel = it }
+    fun pickModel(listJson: String): String? = rankModels(listJson).firstOrNull()
+
+    /** 시도할 모델 목록: 마지막으로 성공한 모델이 맨 앞 */
+    private fun candidates(prefs: Prefs): List<String> {
+        if (prefs.geminiModels.isBlank()) {
+            val (code, text) = request("GET", "$BASE/models?pageSize=200", prefs.geminiKey)
+            if (code != 200) { lastError = "모델 목록 HTTP $code: ${errorMessage(text)}"; return emptyList() }
+            prefs.geminiModels = rankModels(text).take(6).joinToString(",")
+        }
+        val all = prefs.geminiModels.split(',').filter { it.isNotBlank() }
+        return (listOf(prefs.geminiModel).filter { it in all } + all).distinct()
     }
 
-    /** texts를 한국어로 번역. 실패하면 null (→ 내장 번역으로 대체) */
-    suspend fun translate(ctx: Context, texts: List<String>, context: String = ""): List<String>? = withContext(Dispatchers.IO) {
+    private fun callOnce(model: String, key: String, chunk: List<String>, context: String): Pair<Int, List<String>?> {
+        val body = JSONObject()
+            .put("systemInstruction", JSONObject().put("parts", JSONArray().put(JSONObject().put("text", SYSTEM + if (context.isNotEmpty()) " 참고: $context" else ""))))
+            .put("contents", JSONArray().put(JSONObject().put("role", "user").put("parts", JSONArray().put(JSONObject().put("text", JSONArray(chunk).toString())))))
+            .put("generationConfig", JSONObject().put("responseMimeType", "application/json").put("temperature", 0.3))
+        val (code, text) = request("POST", "$BASE/models/$model:generateContent", key, body.toString())
+        if (code != 200) { lastError = "HTTP $code ($model): ${errorMessage(text)}"; return code to null }
+        val parts = JSONObject(text).optJSONArray("candidates")?.optJSONObject(0)?.optJSONObject("content")?.optJSONArray("parts")
+        val joined = parts?.let { p -> (0 until p.length()).joinToString("") { p.getJSONObject(it).optString("text") } }.orEmpty()
+        val arr = runCatching { JSONArray(joined) }.getOrNull()
+        if (arr == null || arr.length() != chunk.size) { lastError = "응답 형식이 맞지 않음 ($model)"; return 200 to null }
+        return 200 to (0 until arr.length()).map { arr.optString(it, chunk[it]) }
+    }
+
+    /** texts를 한국어로 번역. 실패하면 null (→ 예비 번역으로 대체) */
+    suspend fun translate(ctx: Context, texts: List<String>, context: String = "", force: Boolean = false): List<String>? = withContext(Dispatchers.IO) {
         val prefs = Prefs(ctx)
         if (texts.isEmpty()) return@withContext emptyList()
+        if (force) prefs.geminiCooldownUntil = 0
         if (!usable(prefs)) return@withContext null
         runCatching {
-            val model = model(prefs) ?: return@runCatching null
             val out = ArrayList<String>(texts.size)
             for (chunk in texts.chunked(CHUNK)) {
-                val body = JSONObject()
-                    .put("systemInstruction", JSONObject().put("parts", JSONArray().put(JSONObject().put("text", SYSTEM + if (context.isNotEmpty()) " 참고: $context" else ""))))
-                    .put("contents", JSONArray().put(JSONObject().put("role", "user").put("parts", JSONArray().put(JSONObject().put("text", JSONArray(chunk).toString())))))
-                    .put("generationConfig", JSONObject().put("responseMimeType", "application/json").put("temperature", 0.3))
-                val (code, text) = request("POST", "$BASE/models/$model:generateContent", prefs.geminiKey, body.toString())
-                when {
-                    code == 429 -> { // 무료 한도 소진 → 1시간 동안 내장 번역 사용
-                        prefs.geminiCooldownUntil = System.currentTimeMillis() + COOLDOWN_MS
-                        lastError = "무료 한도를 다 썼어요 · 1시간 동안 휴대폰 내장 번역 사용"
-                        return@runCatching null
-                    }
-                    code == 404 -> { prefs.geminiModel = ""; lastError = "모델을 찾지 못함 ($model)"; return@runCatching null }
-                    code != 200 -> { lastError = "HTTP $code ($model): ${errorMessage(text)}"; return@runCatching null }
+                var done: List<String>? = null
+                var allQuota = true
+                // 모델마다 무료 한도가 달라서, 한도가 없거나(429) 못 쓰는 모델(400/404)이면 다음 모델로
+                for (model in candidates(prefs)) {
+                    val (code, result) = callOnce(model, prefs.geminiKey, chunk, context)
+                    if (result != null) { done = result; prefs.geminiModel = model; break }
+                    if (code == 401 || code == 403) return@runCatching null // 키 문제: 다른 모델도 소용없음
+                    if (code != 429) allQuota = false
                 }
-                val parts = JSONObject(text).optJSONArray("candidates")?.optJSONObject(0)?.optJSONObject("content")?.optJSONArray("parts")
-                val joined = parts?.let { p -> (0 until p.length()).joinToString("") { p.getJSONObject(it).optString("text") } }.orEmpty()
-                val arr = runCatching { JSONArray(joined) }.getOrNull()
-                if (arr == null || arr.length() != chunk.size) { lastError = "응답 형식이 맞지 않음"; return@runCatching null }
-                for (i in 0 until arr.length()) out += arr.optString(i, chunk[i])
+                if (done == null) {
+                    if (allQuota && prefs.geminiModels.isNotBlank()) {
+                        prefs.geminiCooldownUntil = System.currentTimeMillis() + COOLDOWN_MS
+                        lastError = "모든 모델의 무료 한도를 다 썼어요 · 1시간 동안 예비 번역 사용\n(${lastError})"
+                    }
+                    return@runCatching null
+                }
+                out += done
             }
             lastError = null
             out as List<String>
-        }.getOrElse { lastError = if (it is java.net.SocketTimeoutException) "응답이 너무 늦어요 (30초 초과, ${prefs.geminiModel})" else (it.message ?: "연결 실패"); null }
+        }.getOrElse { lastError = if (it is java.net.SocketTimeoutException) "응답이 너무 늦어요 (30초 초과)" else (it.message ?: "연결 실패"); null }
     }
 }

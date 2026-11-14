@@ -70,7 +70,7 @@ object RedditLocal {
                 return source(id, sub, color, error == null && posts.isNotEmpty(), error) to posts
             }
             if (!network) return@map cached(null)
-            if (now < cooldownUntil) return@map cached("Reddit이 접근을 제한함 · ${(cooldownUntil - now) / 60000 + 1}분 뒤 다시 시도")
+            if (now < cooldownUntil) return@map cached("Reddit이 접근을 막음 (${state.optString("note")}) · ${(cooldownUntil - now) / 60000 + 1}분 뒤 다시 시도")
             if (now - entry.optLong("fetchedAt", 0) < MIN_INTERVAL_MS && entry.has("posts")) return@map cached(null)
 
             fun get(url: String, accept: String): Pair<Int, String> {
@@ -96,7 +96,7 @@ object RedditLocal {
                     if (rc == 200) posts = runCatching { parseRss(rt, id, now) }.getOrDefault(emptyList())
                     if (posts.isEmpty() && (rc == 429 || rc == 403)) {
                         cooldownUntil = now + COOLDOWN_MS
-                        state.put("cooldownUntil", cooldownUntil)
+                        state.put("cooldownUntil", cooldownUntil).put("note", note)
                         return@map cached("Reddit이 접근을 막음 ($note) · 1시간 뒤 다시 시도")
                     }
                 }

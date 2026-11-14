@@ -218,7 +218,7 @@ fun SettingsScreen(feed: Feed?, onBack: (() -> Unit)? = null, onSetup: (() -> Un
                         Button(shape = CircleShape, enabled = geminiKey.isNotBlank(), onClick = {
                             geminiStatus = "확인 중…"
                             scope.launch {
-                                val r = Gemini.translate(ctx, listOf("This meme is so relatable lol"))
+                                val r = Gemini.translate(ctx, listOf("This meme is so relatable lol"), force = true)
                                 geminiStatus = if (r != null) "✅ 연결됨 (${prefs.geminiModel}) → ${r[0]}" else "⚠ ${Gemini.lastError ?: "실패"}"
                             }
                         }) { Text("번역 테스트", fontWeight = FontWeight.Bold) }
@@ -262,7 +262,7 @@ fun SettingsScreen(feed: Feed?, onBack: (() -> Unit)? = null, onSetup: (() -> Un
                     Spacer(Modifier.height(8.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            "Reddit도 클라우드 서버 접근을 막아서, 이 휴대폰에서 30분에 한 번 인기글 목록만 받아와요. 접근이 제한되면 1시간 쉬어요.",
+                            "Reddit은 로그인 없는 접근을 휴대폰에서도 막는 경우가 많아서 기본으로 꺼져 있어요. 켜면 30분에 한 번 시도하고, 막히면 1시간 쉬어요.",
                             fontSize = 13.sp, lineHeight = 19.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f),
                         )
                         Spacer(Modifier.width(12.dp))
