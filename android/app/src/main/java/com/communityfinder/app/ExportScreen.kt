@@ -106,7 +106,7 @@ fun ExportDetail(post: Post, source: Source?, onBack: () -> Unit) {
                         Column(Modifier.padding(vertical = 14.dp)) {
                             Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Text("이미지 ${result?.pieces?.size ?: 0}장", fontWeight = FontWeight.ExtraBold, fontSize = 16.sp, modifier = Modifier.weight(1f))
-                                Text("작성자 모자이크 (${done?.authorRects?.size ?: 0}곳)", fontSize = 13.sp)
+                                Text("작성자 모자이크", fontSize = 13.sp)
                                 Spacer(Modifier.width(6.dp))
                                 Switch(checked = mosaicOn, onCheckedChange = { mosaicOn = it }, modifier = Modifier.height(28.dp))
                             }

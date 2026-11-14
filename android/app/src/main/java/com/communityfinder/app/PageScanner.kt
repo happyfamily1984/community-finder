@@ -86,7 +86,27 @@ val AUTHOR_SELECTORS = mapOf(
     "lemmy" to "a[href^='/u/'], .person-listing, a.text-info[href*='/u/'], img.avatar-overlay",
 )
 
-private fun analyzeJs(title: String, siteSel: String) = """
+/** 사이트별 본문 영역 (댓글·광고를 빼고 본문만 내보내기 위함). 앞에서부터 먼저 맞는 것을 사용 */
+val BODY_SELECTORS = mapOf(
+    "theqoo" to ".rd_body, article .xe_content, .xe_content",
+    "fmkorea" to ".rd_body, article .xe_content, .xe_content",
+    "dcinside" to ".thum-txtin, .thum-txt, .gallview-thum",
+    "clien" to ".post_article, .post_content, .post_view",
+    "ruliweb" to ".view_content, .board_main_view .view_content, article",
+    "natepann" to "#contentArea, .posting, .content-view, .view-wrap .content",
+    "bobaedream" to ".article-body, .bodyCont, .content02, .cont_area, #body_frame",
+    "lemmy" to "#postContent, .post-listing .md-div, article",
+    "jp" to ".article-body, .entry-content, .article-body-inner, #article-body, .entry-body, article",
+)
+
+/** 캡처 전에 광고 영역을 숨김 */
+private const val HIDE_ADS_JS = """
+(function(){try{
+  document.querySelectorAll('ins.adsbygoogle,iframe:not([src*="youtube"]):not([src*="youtu.be"]),[id^="google_ads"],[id^="div-gpt-ad"],[class*="adsbygoogle"],[class*="coupang"],[id*="coupang"],a[href*="coupang.com"],a[href*="link.coupang"]').forEach(function(e){e.style.setProperty('display','none','important');});
+}catch(x){}})()
+"""
+
+private fun analyzeJs(title: String, siteSel: String, bodySel: String = "") = """
 (function(){
   var d=document.documentElement, vw=d.clientWidth||window.innerWidth, sx=window.scrollX, sy=window.scrollY;
   function R(e){var r=e.getBoundingClientRect();return [r.left+sx,r.top+sy,r.width,r.height];}
@@ -109,6 +129,9 @@ private fun analyzeJs(title: String, siteSel: String) = """
     cands.push({e:e,s:s,a:r.width*r.height});});
   var max=0; cands.forEach(function(c){if(c.s>max)max=c.s;});
   var best=null; cands.forEach(function(c){if(c.s>=max*0.8&&(!best||c.a<best.a))best=c;});
+  var bsel=${JSONObject.quote(bodySel)};
+  if(bsel){try{var bs=document.querySelectorAll(bsel);for(var bi=0;bi<bs.length;bi++){var br=bs[bi].getBoundingClientRect();
+    if(br.width>vw*0.5&&br.height>40){best={e:bs[bi]};break;}}}catch(x){}}
   var titleR=null, key=${JSONObject.quote(title.take(12))};
   if(key.length>2){var ts=document.querySelectorAll('h1,h2,h3,h4,[class*="title"],[class*="subject"],[class*="tit"]');
     for(var i=0;i<ts.length;i++){if((ts[i].innerText||'').indexOf(key)>=0){var tr=ts[i].getBoundingClientRect();if(tr.height>0&&tr.height<300){titleR=R(ts[i]);break;}}}}
@@ -141,6 +164,7 @@ fun PageScanner(post: Post, attempt: Int, onState: (ScanState) -> Unit) {
     suspend fun capture(wv: WebView) {
         if (busy) return
         busy = true
+        eval(wv, HIDE_ADS_JS)
         val lang = langOf(post.source)
         if (isGlobal(post.source)) {
             // 해외 글: 페이지의 외국어 글자를 한국어로 바꾼 뒤 캡처
@@ -157,14 +181,14 @@ fun PageScanner(post: Post, attempt: Int, onState: (ScanState) -> Unit) {
         onState(ScanState.Loading(90, "글 전체 펼치는 중"))
         delay(600)
         fun parse(raw: String?) = runCatching { JSONObject(JSONArray("[$raw]").getString(0)) }.getOrNull()
-        val first = parse(eval(wv, analyzeJs(post.title, AUTHOR_SELECTORS[post.source.substringBefore("-")].orEmpty())))
+        val first = parse(eval(wv, analyzeJs(post.title, AUTHOR_SELECTORS[post.source.substringBefore("-")].orEmpty(), BODY_SELECTORS[post.source.substringBefore("-")].orEmpty())))
         val cssW = first?.optDouble("w")?.takeIf { it > 0 } ?: (widthPx / density.density).toDouble()
         val fullPx = ((first?.optDouble("h") ?: 0.0) * widthPx / cssW).toInt().coerceAtLeast(screenHeightPx)
         webHeightPx = fullPx.coerceAtMost(MAX_SCAN_HEIGHT_PX)
         onState(ScanState.Loading(95, "이미지 불러오는 중"))
         delay(1800)
         // 늘어난 화면 기준으로 위치 다시 측정
-        val info = parse(eval(wv, analyzeJs(post.title, AUTHOR_SELECTORS[post.source.substringBefore("-")].orEmpty()))) ?: first
+        val info = parse(eval(wv, analyzeJs(post.title, AUTHOR_SELECTORS[post.source.substringBefore("-")].orEmpty(), BODY_SELECTORS[post.source.substringBefore("-")].orEmpty()))) ?: first
         onState(ScanState.Loading(99, "캡처 중"))
         try {
             val bmp = Bitmap.createBitmap(wv.width.coerceAtLeast(1), wv.height.coerceAtLeast(1), Bitmap.Config.ARGB_8888)

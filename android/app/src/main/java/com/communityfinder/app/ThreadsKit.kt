@@ -40,7 +40,7 @@ object ThreadsKit {
 
     /**
      * 스레드용 세로 분할 위치 계산 (픽셀 없이 테스트 가능하도록 분리).
-     * - 전체가 9:16보다 짧으면 한 장
+     * - 전체가 가로의 2배보다 짧으면 한 장, 여러 장이면 한 장이 가로의 약 1.6배
      * - 여러 장이면 길이를 고르게 나눔 (끝에 자투리 조각이 생기지 않게)
      * - 빈 줄(여백)에서만 자르고, 사진/영상 영역(avoid) 안에서는 자르지 않음
      * 반환: [시작, 자르는 위치들..., 끝]
@@ -52,10 +52,10 @@ object ThreadsKit {
         while (bottom > top && blank[bottom - 1]) bottom--
         top = maxOf(0, top - 8); bottom = minOf(blank.size, bottom + 8) // 위아래 여백은 조금만 남김
         val h = bottom - top
-        val maxH = (w * 16f / 9f).toInt()
+        val maxH = w * 2 // 한 장으로 둘 수 있는 최대 길이 (가로의 2배)
         if (h <= maxH) return listOf(top, bottom)
 
-        val n = Math.ceil(h / (w * 1.35)).toInt().coerceIn(2, MAX_PIECES)
+        val n = Math.ceil(h / (w * 1.6)).toInt().coerceIn(2, MAX_PIECES)
         val ideal = h.toFloat() / n
         fun inAvoid(y: Int) = avoid.firstOrNull { y > it.first && y < it.last }
 

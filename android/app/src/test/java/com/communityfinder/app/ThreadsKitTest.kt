@@ -27,7 +27,7 @@ class ThreadsKitTest {
         assertNotEquals(a, ThreadsKit.review(post, "", 1))
     }
 
-    // w=100 → 한 장 최대 177px, 여러 장일 때 목표 135px
+    // w=100 → 한 장 최대 200px, 여러 장일 때 목표 160px
     private fun rows(h: Int, blankAt: List<IntRange>) = BooleanArray(h) { y -> blankAt.any { y in it } }
 
     @Test
