@@ -37,45 +37,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 
-/** 내보내기 탭: 글 선택 → 스레드용 자료 만들기 */
-@Composable
-fun ExportTab(feed: Feed?, recent: List<Post>, selected: Post?, onSelect: (Post) -> Unit, onBack: () -> Unit) {
-    if (selected != null) {
-        BackHandler(onBack = onBack)
-        key(selected.id) {
-            ExportDetail(selected, feed?.sourceById?.get(selected.source) ?: knownSource(selected.source), onBack)
-        }
-        return
-    }
-    val hot = remember(feed) { feed?.posts.orEmpty().sortedByDescending { it.score }.take(50) }
-    Column(Modifier.fillMaxSize().statusBarsPadding()) {
-        Text("내보내기", fontSize = 21.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.padding(start = 20.dp, top = 14.dp))
-        Text(
-            "스레드에 올릴 글을 고르세요. 글 내용을 한 화면 크기로 나눈 이미지와 제목·출처·감상평을 만들어 드려요.",
-            fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, lineHeight = 18.sp,
-            modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp),
-        )
-        LazyColumn(contentPadding = PaddingValues(bottom = 12.dp)) {
-            if (recent.isNotEmpty()) {
-                item { SectionLabel("최근 본 글") }
-                items(recent.take(5), key = { "r" + it.id }) { p -> PostCard(p, feed?.sourceById?.get(p.source) ?: knownSource(p.source), false, { onSelect(p) }, { onSelect(p) }) }
-            }
-            item { SectionLabel("지금 화제글") }
-            if (hot.isEmpty()) item { EmptyText("글 목록을 불러오는 중이에요") }
-            items(hot, key = { "h" + it.id }) { p -> PostCard(p, feed?.sourceById?.get(p.source), false, { onSelect(p) }, { onSelect(p) }) }
-        }
-    }
-}
-
-@Composable
-private fun SectionLabel(text: String) {
-    Text(text, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(start = 20.dp, top = 12.dp, bottom = 4.dp))
-}
-
 private data class ExportResult(val pieces: List<Bitmap>, val files: List<File>, val text: String)
 
 @Composable
-private fun ExportDetail(post: Post, source: Source?, onBack: () -> Unit) {
+fun ExportDetail(post: Post, source: Source?, onBack: () -> Unit) {
     val ctx = LocalContext.current
     val sourceName = source?.name ?: post.source
     var attempt by remember { mutableIntStateOf(0) }

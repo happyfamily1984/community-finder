@@ -34,6 +34,11 @@ class Prefs(ctx: Context) {
         get() = sp.getBoolean("fmkoreaLocal", true)
         set(v) = sp.edit().putBoolean("fmkoreaLocal", v).apply()
 
+    /** Reddit을 휴대폰에서 직접 가져오기 (클라우드 수집이 막혀 있어서) */
+    var redditLocal: Boolean
+        get() = sp.getBoolean("redditLocal", true)
+        set(v) = sp.edit().putBoolean("redditLocal", v).apply()
+
     var onboardingDone: Boolean
         get() = sp.getBoolean("onboardingDone", false)
         set(v) = sp.edit().putBoolean("onboardingDone", v).apply()

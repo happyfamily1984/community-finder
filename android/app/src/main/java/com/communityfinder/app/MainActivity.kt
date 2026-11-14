@@ -28,14 +28,14 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.IosShare
+import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.material.icons.outlined.IosShare
+import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -92,8 +92,8 @@ fun AppTheme(dark: Boolean = isSystemInDarkTheme(), content: @Composable () -> U
 }
 
 enum class Tab(val label: String, val on: ImageVector, val off: ImageVector) {
-    HOME("홈", Icons.Filled.Home, Icons.Outlined.Home),
-    EXPORT("내보내기", Icons.Filled.IosShare, Icons.Outlined.IosShare),
+    HOME("국내", Icons.Filled.Home, Icons.Outlined.Home),
+    GLOBAL("해외", Icons.Filled.Public, Icons.Outlined.Public),
     RECENT("최근 본 글", Icons.Outlined.History, Icons.Outlined.History),
     SETTINGS("설정", Icons.Filled.Settings, Icons.Outlined.Settings),
 }
@@ -132,15 +132,36 @@ fun App() {
     LaunchedEffect(Unit) { refresh() }
     if (tab != Tab.HOME) BackHandler { tab = Tab.HOME }
 
+    // 해외 글 제목은 휴대폰 안에서 한국어로 번역 (ML Kit, 무료)
+    var titleKo by remember { mutableStateOf(Translator.cachedTitles(ctx)) }
+    var translating by remember { mutableStateOf(false) }
+    LaunchedEffect(feed, tab) {
+        val f = feed ?: return@LaunchedEffect
+        if (tab != Tab.GLOBAL || f.posts.none { isGlobal(it.source) && it.id !in titleKo }) return@LaunchedEffect
+        translating = true
+        titleKo = Translator.translateTitles(ctx, f.posts)
+        translating = false
+    }
+    val feedKr = remember(feed) { feed?.let { f -> f.copy(sources = f.sources.filter { !isGlobal(it.id) }, posts = f.posts.filter { !isGlobal(it.source) }) } }
+    val feedGlobal = remember(feed, titleKo) {
+        feed?.let { f ->
+            f.copy(
+                sources = f.sources.filter { isGlobal(it.id) },
+                posts = f.posts.filter { isGlobal(it.source) }.map { p -> titleKo[p.id]?.let { p.copy(title = it) } ?: p },
+            )
+        }
+    }
+
     val favIds = emptySet<String>()
     // 내보내기(스레드용)로 보낼 글. 글을 길게 누르거나 미리보기에서 '내보내기'
     var exportPost by remember { mutableStateOf<Post?>(null) }
-    val toExport: (Post) -> Unit = { p -> exportPost = p; tab = Tab.EXPORT }
+    val toExport: (Post) -> Unit = { p -> exportPost = p }
     // 글 누르면 앱 안에서 모바일 화면 스캔 이미지로 보기
     var preview by remember { mutableStateOf<Post?>(null) }
     val open: (Post) -> Unit = { PostStore.recent(ctx).add(it); storeVersion++; preview = it }
 
     if (preview != null) BackHandler { preview = null }
+    if (exportPost != null) BackHandler { exportPost = null }
 
 
     var onboarding by remember { mutableStateOf(!Prefs(ctx).onboardingDone) }
@@ -156,10 +177,10 @@ fun App() {
     ) { pad ->
         Box(Modifier.padding(pad).fillMaxSize()) {
             when (tab) {
-                Tab.HOME -> HomeScreen(feed, error, loading, favIds, ::refresh, open, toExport, onBell = { tab = Tab.SETTINGS })
-                Tab.EXPORT -> ExportTab(
-                    feed = feed, recent = remember(storeVersion) { PostStore.recent(ctx).all() },
-                    selected = exportPost, onSelect = { exportPost = it }, onBack = { exportPost = null },
+                Tab.HOME -> HomeScreen(feedKr, error, loading, favIds, ::refresh, open, toExport, onBell = { tab = Tab.SETTINGS })
+                Tab.GLOBAL -> HomeScreen(
+                    feedGlobal, if (translating) "제목 번역 중… (처음엔 번역 모델을 받느라 조금 걸려요)" else error,
+                    loading, favIds, ::refresh, open, toExport, onBell = { tab = Tab.SETTINGS },
                 )
                 Tab.RECENT -> SavedScreen(
                     title = "최근 본 글",
@@ -181,6 +202,12 @@ fun App() {
             onOpenSite = { openPost(ctx, p) },
             onBack = { preview = null },
         )
+    } }
+    // 스레드용 내보내기 (미리보기의 '내보내기' 또는 글 길게 누르기)
+    exportPost?.let { p -> key("x" + p.id) {
+        Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+            ExportDetail(p, feed?.sourceById?.get(p.source) ?: knownSource(p.source), onBack = { exportPost = null })
+        }
     } }
     }
 }
@@ -396,7 +423,7 @@ fun StatusLine(feed: Feed?, error: String?) {
         if (error != null) add("⚠ $error")
     }
     if (parts.isEmpty()) return
-    val color = if (error != null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+    val color = if (error != null && !error.startsWith("제목 번역")) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
     Row(Modifier.padding(horizontal = 18.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         Icon(Icons.Outlined.History, null, tint = color, modifier = Modifier.size(15.dp))
         Spacer(Modifier.width(5.dp))

@@ -65,7 +65,8 @@ class HotPostWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ct
                 prefs.seenIds = ids.toSet()
                 return emptyList()
             }
-            val fresh = feed.posts.filter { it.id !in seen }
+            // 알림은 국내 커뮤니티만 (해외 글은 제목이 영어라 제외)
+            val fresh = feed.posts.filter { it.id !in seen && !isGlobal(it.source) }
             val matched = fresh
                 .filter { matchesAlert(it, prefs.minScore, prefs.keywords, prefs.mutedSources) }
                 .sortedByDescending { it.score }

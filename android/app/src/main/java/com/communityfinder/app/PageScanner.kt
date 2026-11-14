@@ -44,6 +44,24 @@ sealed interface ScanState {
 private const val MAX_SCAN_HEIGHT_PX = 12000 // 메모리 보호: 너무 긴 글은 앞부분만
 
 /** 페이지 분석: 작성자 닉네임 위치, 본문 영역, 본문 텍스트 (CSS px, 문서 기준) */
+/** 페이지의 글자 노드를 모아 window.__cfNodes에 보관하고 문자열 배열을 반환 (shadow DOM 포함) */
+private const val COLLECT_TEXT_JS = """
+(function(){
+  var nodes=[], texts=[], skip={SCRIPT:1,STYLE:1,NOSCRIPT:1,TEXTAREA:1,INPUT:1,CODE:1,SVG:1};
+  function walk(root){
+    if(nodes.length>=500)return;
+    var c=root.childNodes;
+    for(var i=0;i<c.length&&nodes.length<500;i++){var n=c[i];
+      if(n.nodeType===3){var t=n.nodeValue; if(t&&t.trim().length>1&&/[A-Za-z]{2,}/.test(t)&&t.length<1500){nodes.push(n);texts.push(t);}}
+      else if(n.nodeType===1&&!skip[n.tagName.toUpperCase()]){ if(n.shadowRoot)walk(n.shadowRoot); walk(n); }
+    }
+  }
+  walk(document.body);
+  window.__cfNodes=nodes;
+  return JSON.stringify(texts);
+})()
+"""
+
 /** 사이트별 작성자(글쓴이·댓글 작성자) 닉네임/프로필 위치. GitHub 공개 코드로 확인한 선택자 + 추정 */
 val AUTHOR_SELECTORS = mapOf(
     "fmkorea" to ".member_plate, a[class*='member_'], .side.fr .profile, img.xe_point_level_icon, .fdb_itm .meta > a",
@@ -53,6 +71,8 @@ val AUTHOR_SELECTORS = mapOf(
     "natepann" to ".writer, .info .writer, .nameui, .usertxt .nameui, .cmt_best .writer, .list_comment .writer, .nick, .sub .writer, .profile",
     "bobaedream" to ".author, .data4, .util .name, .info .nickName, .nickName, .reple_id, .rename, .writer, .replylist .name, .util2 .info span:first-child, a[onclick*='submenu']",
     "theqoo" to ".author, .nick_name, .side .author",
+    "reddit" to "a[href*='/user/'], a[href^='/u/'], [slot='authorName'], faceplate-hovercard, .author-name, shreddit-async-loader[bundlename*='author']",
+    "lemmy" to "a[href^='/u/'], .person-listing, a.text-info[href*='/u/'], img.avatar-overlay",
 )
 
 private fun analyzeJs(title: String, siteSel: String) = """
@@ -108,17 +128,31 @@ fun PageScanner(post: Post, attempt: Int, onState: (ScanState) -> Unit) {
     suspend fun capture(wv: WebView) {
         if (busy) return
         busy = true
+        if (isGlobal(post.source)) {
+            // 해외 글: 페이지의 영어 글자를 한국어로 바꾼 뒤 캡처 (사진 속 글자는 번역되지 않음)
+            onState(ScanState.Loading(88, "한국어로 번역 중"))
+            delay(800)
+            if (Translator.prepare()) {
+                val raw = eval(wv, COLLECT_TEXT_JS)
+                val texts = runCatching { JSONArray(JSONArray("[$raw]").getString(0)) }.getOrNull()
+                if (texts != null && texts.length() > 0) {
+                    val out = JSONArray()
+                    for (i in 0 until texts.length()) out.put(Translator.translate(texts.getString(i)))
+                    eval(wv, "(function(a){var n=window.__cfNodes||[];for(var i=0;i<n.length&&i<a.length;i++){try{n[i].nodeValue=a[i];}catch(e){}}})($out)")
+                }
+            }
+        }
         onState(ScanState.Loading(90, "글 전체 펼치는 중"))
         delay(600)
         fun parse(raw: String?) = runCatching { JSONObject(JSONArray("[$raw]").getString(0)) }.getOrNull()
-        val first = parse(eval(wv, analyzeJs(post.title, AUTHOR_SELECTORS[post.source].orEmpty())))
+        val first = parse(eval(wv, analyzeJs(post.title, AUTHOR_SELECTORS[post.source.substringBefore("-")].orEmpty())))
         val cssW = first?.optDouble("w")?.takeIf { it > 0 } ?: (widthPx / density.density).toDouble()
         val fullPx = ((first?.optDouble("h") ?: 0.0) * widthPx / cssW).toInt().coerceAtLeast(screenHeightPx)
         webHeightPx = fullPx.coerceAtMost(MAX_SCAN_HEIGHT_PX)
         onState(ScanState.Loading(95, "이미지 불러오는 중"))
         delay(1800)
         // 늘어난 화면 기준으로 위치 다시 측정
-        val info = parse(eval(wv, analyzeJs(post.title, AUTHOR_SELECTORS[post.source].orEmpty()))) ?: first
+        val info = parse(eval(wv, analyzeJs(post.title, AUTHOR_SELECTORS[post.source.substringBefore("-")].orEmpty()))) ?: first
         onState(ScanState.Loading(99, "캡처 중"))
         try {
             val bmp = Bitmap.createBitmap(wv.width.coerceAtLeast(1), wv.height.coerceAtLeast(1), Bitmap.Config.ARGB_8888)

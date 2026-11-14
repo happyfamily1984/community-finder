@@ -111,10 +111,15 @@ object FeedRepository {
 
     /** 클라우드에서 막힌 커뮤니티(에펨코리아)를 휴대폰에서 직접 가져와 합침 */
     private fun withLocalSources(ctx: Context, feed: Feed, network: Boolean = true): Feed {
-        if (!Prefs(ctx).fmkoreaLocal) return feed
+        var f = feed
+        val prefs = Prefs(ctx)
         // 화면을 처음 열 때(network=false)는 저장해 둔 결과만 즉시 표시
-        val (src, posts) = if (network) FmkoreaLocal.load(ctx) else FmkoreaLocal.cachedOnly(ctx)
-        return merge(feed, src, posts)
+        if (prefs.fmkoreaLocal) {
+            val (src, posts) = if (network) FmkoreaLocal.load(ctx) else FmkoreaLocal.cachedOnly(ctx)
+            f = merge(f, src, posts)
+        }
+        if (prefs.redditLocal) RedditLocal.load(ctx, network).forEach { (src, posts) -> f = merge(f, src, posts) }
+        return f
     }
 
     fun merge(feed: Feed, src: Source, posts: List<Post>): Feed = feed.copy(

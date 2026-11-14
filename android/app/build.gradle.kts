@@ -19,6 +19,8 @@ android {
         targetSdk = 35
         versionCode = (System.getenv("VERSION_CODE") ?: "1").toInt()
         versionName = System.getenv("VERSION_NAME") ?: "1.0.0"
+        // 번역 라이브러리(네이티브) 용량 절감: 요즘 휴대폰(64비트 ARM)만 포함
+        ndk { abiFilters += "arm64-v8a" }
         buildConfigField("String", "FEED_URL", "\"$feedUrl\"")
     }
 
@@ -70,6 +72,7 @@ dependencies {
     implementation("androidx.work:work-runtime-ktx:2.10.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
     implementation("org.jsoup:jsoup:1.18.3")
+    implementation("com.google.mlkit:translate:17.0.3")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20240303")

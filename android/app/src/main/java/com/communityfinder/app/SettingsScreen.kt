@@ -55,6 +55,7 @@ fun SettingsScreen(feed: Feed?, onBack: (() -> Unit)? = null, onSetup: (() -> Un
     var interval by remember { mutableIntStateOf(prefs.intervalMin) }
     var feedUrl by remember { mutableStateOf(prefs.feedUrl) }
     var fmLocal by remember { mutableStateOf(prefs.fmkoreaLocal) }
+    var redditLocal by remember { mutableStateOf(prefs.redditLocal) }
     var message by remember { mutableStateOf<String?>(null) }
 
     fun apply() {
@@ -152,7 +153,7 @@ fun SettingsScreen(feed: Feed?, onBack: (() -> Unit)? = null, onSetup: (() -> Un
                 SettingsCard {
                     SectionTitle(Icons.Filled.CheckCircle, "알림 받을 커뮤니티")
                     Spacer(Modifier.height(6.dp))
-                    val sources = feed?.sources.orEmpty()
+                    val sources = feed?.sources.orEmpty().filter { !isGlobal(it.id) }
                     if (sources.isEmpty()) {
                         Text("피드를 받은 뒤에 선택할 수 있어요", color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(vertical = 8.dp))
                     }
@@ -190,6 +191,20 @@ fun SettingsScreen(feed: Feed?, onBack: (() -> Unit)? = null, onSetup: (() -> Un
                         }
                         Spacer(Modifier.width(12.dp))
                         PurpleSwitch(fmLocal) { fmLocal = it; prefs.fmkoreaLocal = it }
+                    }
+                }
+
+                // Reddit
+                SettingsCard {
+                    AccentTitle("Reddit 휴대폰에서 가져오기 (해외 탭)")
+                    Spacer(Modifier.height(8.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            "Reddit도 클라우드 서버 접근을 막아서, 이 휴대폰에서 30분에 한 번 인기글 목록만 받아와요. 접근이 제한되면 1시간 쉬어요.",
+                            fontSize = 13.sp, lineHeight = 19.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f),
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        PurpleSwitch(redditLocal) { redditLocal = it; prefs.redditLocal = it }
                     }
                 }
 

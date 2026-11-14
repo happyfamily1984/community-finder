@@ -117,10 +117,11 @@ export const SOURCES = [
       comments: '.totreply',
     },
   },
+  // Reddit은 클라우드 접근을 막아서(HTTP 403) 앱이 휴대폰에서 직접 받아옴 (RedditLocal.kt)
   // ---- 해외 유머 (id가 reddit-/lemmy- 로 시작하면 앱에서 '해외' 탭 + 번역 대상) ----
-  { id: 'reddit-funny', name: 'Reddit r/funny', board: '오늘의 인기', url: 'https://www.reddit.com/r/funny/', color: '#ff4500', sub: 'funny', fetch: fetchReddit },
-  { id: 'reddit-memes', name: 'Reddit r/memes', board: '오늘의 인기', url: 'https://www.reddit.com/r/memes/', color: '#ff6a33', sub: 'memes', fetch: fetchReddit },
-  { id: 'reddit-unexpected', name: 'Reddit r/Unexpected', board: '오늘의 인기', url: 'https://www.reddit.com/r/Unexpected/', color: '#d93a00', sub: 'Unexpected', fetch: fetchReddit },
+  { id: 'reddit-funny', name: 'Reddit r/funny', board: '오늘의 인기', url: 'https://www.reddit.com/r/funny/', color: '#ff4500', sub: 'funny', fetch: fetchReddit, disabled: true },
+  { id: 'reddit-memes', name: 'Reddit r/memes', board: '오늘의 인기', url: 'https://www.reddit.com/r/memes/', color: '#ff6a33', sub: 'memes', fetch: fetchReddit, disabled: true },
+  { id: 'reddit-unexpected', name: 'Reddit r/Unexpected', board: '오늘의 인기', url: 'https://www.reddit.com/r/Unexpected/', color: '#d93a00', sub: 'Unexpected', fetch: fetchReddit, disabled: true },
   { id: 'lemmy-memes', name: 'Lemmy memes', board: '오늘의 인기', url: 'https://lemmy.world/c/memes', color: '#00a846', host: 'lemmy.world', community: 'memes', fetch: fetchLemmy },
   { id: 'lemmy-shitpost', name: 'Lemmy shitpost', board: '오늘의 인기', url: 'https://lemmy.world/c/lemmyshitpost', color: '#1b8f5a', host: 'lemmy.world', community: 'lemmyshitpost', fetch: fetchLemmy },
   { id: 'lemmy-funny', name: 'Lemmy funny', board: '오늘의 인기', url: 'https://lemmy.world/c/funny', color: '#3aa76d', host: 'lemmy.world', community: 'funny', fetch: fetchLemmy },
