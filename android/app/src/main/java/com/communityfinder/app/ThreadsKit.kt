@@ -38,48 +38,87 @@ object ThreadsKit {
     }
 
     /**
-     * 휴대폰 한 화면에 보기 좋은 3:4 비율로 세로 분할.
-     * 글자 줄이 잘리지 않도록 목표 지점 위쪽 20% 범위에서 '빈 줄'(색이 거의 같은 행)을 찾아 자름.
+     * 스레드용 세로 분할 위치 계산 (픽셀 없이 테스트 가능하도록 분리).
+     * - 전체가 9:16보다 짧으면 한 장
+     * - 여러 장이면 길이를 고르게 나눔 (끝에 자투리 조각이 생기지 않게)
+     * - 빈 줄(여백)에서만 자르고, 사진/영상 영역(avoid) 안에서는 자르지 않음
+     * 반환: [시작, 자르는 위치들..., 끝]
      */
-    fun split(src: Bitmap, ratio: Float = 4f / 3f): List<Bitmap> {
+    fun cutPoints(blank: BooleanArray, w: Int, avoid: List<IntRange> = emptyList()): List<Int> {
+        var top = 0
+        var bottom = blank.size
+        while (top < bottom && blank[top]) top++
+        while (bottom > top && blank[bottom - 1]) bottom--
+        top = maxOf(0, top - 8); bottom = minOf(blank.size, bottom + 8) // 위아래 여백은 조금만 남김
+        val h = bottom - top
+        val maxH = (w * 16f / 9f).toInt()
+        if (h <= maxH) return listOf(top, bottom)
+
+        val n = Math.ceil(h / (w * 1.35)).toInt().coerceIn(2, MAX_PIECES)
+        val ideal = h.toFloat() / n
+        fun inAvoid(y: Int) = avoid.firstOrNull { y > it.first && y < it.last }
+
+        // 자를 수 있는 후보: 6px 이상 이어진 빈 줄의 가운데
+        val cands = mutableListOf<Pair<Int, Int>>() // (위치, 여백 길이)
+        var y = top
+        while (y < bottom) {
+            if (blank[y]) {
+                val s = y
+                while (y < bottom && blank[y]) y++
+                val mid = (s + y) / 2
+                if (y - s >= 6 && inAvoid(mid) == null) cands += mid to (y - s)
+            } else y++
+        }
+
+        val cuts = mutableListOf(top)
+        for (i in 1 until n) {
+            val target = (top + ideal * i).toInt()
+            val prev = cuts.last()
+            val best = cands
+                .filter { Math.abs(it.first - target) <= ideal * 0.4f && it.first - prev >= ideal * 0.45f && bottom - it.first >= ideal * 0.45f }
+                .minByOrNull { Math.abs(it.first - target) - minOf(it.second, 80) * 2 }
+            var cut = best?.first
+            if (cut == null) {
+                // 여백이 없으면: 사진 안이면 사진 경계로 옮기고, 아니면 목표 지점에서 자름
+                val r = inAvoid(target)
+                cut = if (r != null && r.last - r.first < maxH) {
+                    listOf(r.first, r.last).filter { it - prev >= ideal * 0.3f && bottom - it >= ideal * 0.3f }
+                        .minByOrNull { Math.abs(it - target) }
+                } else target
+            }
+            if (cut != null && cut > prev) cuts += cut
+        }
+        cuts += bottom
+        return cuts
+    }
+
+    fun split(src: Bitmap, avoid: List<IntRange> = emptyList()): List<Bitmap> {
         val w = src.width
-        val pieceH = (w * ratio).toInt().coerceAtLeast(1)
-        val pieces = mutableListOf<Bitmap>()
         val row = IntArray(w)
-        fun isBlank(y: Int): Boolean {
+        val blank = BooleanArray(src.height) { y ->
             src.getPixels(row, 0, w, 0, y, w, 1)
-            val base = row[0]
-            for (x in 0 until w step 3) {
+            val base = row[w / 2]
+            var ok = true
+            var x = 0
+            while (x < w) {
                 val p = row[x]
                 val d = Math.abs(((p shr 16) and 255) - ((base shr 16) and 255)) +
                     Math.abs(((p shr 8) and 255) - ((base shr 8) and 255)) + Math.abs((p and 255) - (base and 255))
-                if (d > 30) return false
+                if (d > 30) { ok = false; break }
+                x += 3
             }
-            return true
+            ok
         }
-        var y = 0
-        while (y < src.height && pieces.size < MAX_PIECES) {
-            var end = y + pieceH
-            if (end >= src.height) {
-                end = src.height
-            } else {
-                val floor = end - pieceH / 5
-                var c = end
-                while (c > floor && !isBlank(c)) c--
-                if (c > floor) end = c
-            }
-            if (end - y < pieceH / 6 && pieces.isNotEmpty()) break // 끝에 남은 아주 짧은 조각은 버림
-            pieces += Bitmap.createBitmap(src, 0, y, w, end - y)
-            y = end
-        }
-        return pieces
+        val cuts = cutPoints(blank, w, avoid)
+        return cuts.zipWithNext { a, b -> Bitmap.createBitmap(src, 0, a, w, b - a) }
     }
 
-    fun crop(src: Bitmap, r: Rect?): Bitmap {
-        if (r == null) return src
-        val c = Rect(0, r.top - 12, src.width, r.bottom + 12) // 좌우는 전체 폭 유지 (모바일 화면 그대로)
-        if (!c.intersect(0, 0, src.width, src.height) || c.height() < 100) return src
-        return Bitmap.createBitmap(src, c.left, c.top, c.width(), c.height())
+    /** 본문 영역(좌우는 전체 폭 유지). 없으면 전체 */
+    fun cropRect(src: Bitmap, r: Rect?): Rect {
+        val full = Rect(0, 0, src.width, src.height)
+        if (r == null) return full
+        val c = Rect(0, r.top - 12, src.width, r.bottom + 12)
+        return if (c.intersect(full) && c.height() >= 100) c else full
     }
 
     fun sourceLine(sourceName: String) = "출처 : $sourceName"
@@ -89,31 +128,31 @@ object ThreadsKit {
     enum class Mood(val keywords: List<String>, val lines: List<String>) {
         FUNNY(
             listOf("ㅋㅋ", "웃긴", "웃김", "유머", "개웃", "레전드", "짤", "드립", "빵터", "킹받"),
-            listOf("이거 보고 혼자 빵 터졌어요 ㅋㅋㅋ", "아니 이건 진짜 웃겨서 저장했어요 ㅋㅋ", "오늘 본 것 중에 제일 웃김 ㅋㅋㅋ"),
+            listOf("이거 보고 혼자 빵 터졌다 ㅋㅋㅋ", "아니 이건 진짜 웃겨서 저장함 ㅋㅋ", "오늘 본 것 중에 제일 웃김 ㅋㅋㅋ"),
         ),
         ISSUE(
             listOf("논란", "사고", "고소", "폭로", "충격", "분노", "사기", "음주", "갑질", "피해", "경찰", "구속", "의혹"),
-            listOf("이건 좀 선 넘은 것 같은데… 다들 어떻게 생각하세요?", "보면서 진짜 어이가 없었어요. 이게 맞나요?", "커뮤에서 난리 난 이유가 있네요."),
+            listOf("이건 좀 선 넘은 것 같은데…", "보면서 진짜 어이가 없었다. 이게 맞나?", "커뮤에서 난리 난 이유가 있네."),
         ),
         TOUCHING(
             listOf("감동", "눈물", "울컥", "사연", "고마", "부모", "엄마", "아빠", "할머니", "힐링", "따뜻"),
-            listOf("읽다가 울컥했어요. 오늘 하루 이 글로 버팁니다.", "이런 글 보면 아직 세상 따뜻하다고 느껴요.", "마음이 몽글몽글해지는 글이에요."),
+            listOf("읽다가 울컥했다. 오늘 하루 이 글로 버틴다.", "이런 글 보면 아직 세상 따뜻하다 싶다.", "마음이 몽글몽글해지는 글이다."),
         ),
         INFO(
             listOf("꿀팁", "정리", "방법", "후기", "추천", "리뷰", "비교", "가이드", "총정리", "알아두"),
-            listOf("이거 몰랐던 사람 많을 듯. 저장각이에요.", "정리 잘 돼 있어서 공유해요. 필요한 분들 참고하세요!", "알아두면 진짜 쓸모 있는 내용이네요."),
+            listOf("이거 몰랐던 사람 많을 듯. 저장각이다.", "정리 잘 돼 있어서 가져왔다. 필요한 사람 참고해!", "알아두면 진짜 쓸모 있는 내용이네."),
         ),
         MONEY(
             listOf("주식", "코인", "부동산", "월급", "적금", "금리", "연봉", "집값", "환율", "투자", "물가"),
-            listOf("요즘 다들 이거 때문에 고민 많으시죠…", "현실적인 얘기라 더 와닿네요. 여러분은 어떠세요?", "돈 얘기는 언제나 뜨겁네요."),
+            listOf("요즘 다들 이거 때문에 고민 많지…", "현실적인 얘기라 더 와닿는다.", "돈 얘기는 언제나 뜨겁네."),
         ),
         SPORTS(
             listOf("경기", "골", "홈런", "축구", "야구", "농구", "손흥민", "이강인", "류현진", "우승", "감독", "선수"),
-            listOf("이 장면은 진짜 역대급이었어요.", "보는 내내 소름 돋았어요. 다들 보셨나요?", "팬이라면 무조건 봐야 하는 장면!"),
+            listOf("이 장면은 진짜 역대급이었다.", "보는 내내 소름 돋았다.", "팬이라면 무조건 봐야 하는 장면!"),
         ),
         DEFAULT(
             emptyList(),
-            listOf("요즘 커뮤에서 제일 핫한 글 가져왔어요.", "이거 보셨어요? 반응이 엄청 뜨겁더라고요.", "생각할 거리가 있는 글이라 공유해요."),
+            listOf("요즘 커뮤에서 제일 핫한 글 가져왔다.", "이거 봤어? 반응 엄청 뜨겁더라.", "생각할 거리가 있는 글이라 가져왔다."),
         ),
     }
 
@@ -125,23 +164,12 @@ object ThreadsKit {
             .maxByOrNull { it.second }?.first ?: Mood.DEFAULT
     }
 
-    /** 감상평 예시. variant를 바꾸면 다른 문장 */
-    fun review(post: Post, sourceName: String, body: String, variant: Int = 0): String {
+    /** 감상평 예시 (반말, 첫 줄 + 마지막 줄). variant를 바꾸면 다른 문장 */
+    fun review(post: Post, body: String, variant: Int = 0): String {
         val mood = moodOf(post.title, body)
         val line = mood.lines[Math.floorMod(variant, mood.lines.size)]
-        val stat = buildList {
-            post.views?.let { add("조회 ${fmt(it)}") }
-            post.comments?.let { add("댓글 ${fmt(it)}") }
-        }.joinToString(", ")
-        val ask = listOf("여러분 생각은 어떠세요? 👇", "댓글로 의견 남겨주세요!", "공감되면 ❤️ 눌러주세요").let { it[Math.floorMod(variant, it.size)] }
-        return buildString {
-            append(line)
-            append("\n\n")
-            append("📌 ${post.title}")
-            if (stat.isNotEmpty()) append("\n($sourceName $stat)")
-            append("\n\n")
-            append(ask)
-        }
+        val ask = listOf("다들 어떻게 생각해? 👇", "댓글로 의견 남겨줘!", "공감되면 ❤️ 눌러줘").let { it[Math.floorMod(variant, it.size)] }
+        return "$line\n\n$ask"
     }
 
     // ---------- 복사 · 저장 · 공유 ----------

@@ -31,6 +31,7 @@ data class ScanResult(
     val truncated: Boolean,
     val authorRects: List<Rect>,
     val contentRect: Rect?,
+    val imageRects: List<Rect>,
     val text: String,
 )
 
@@ -51,6 +52,8 @@ private fun analyzeJs(title: String) = """
   var authors=[];
   document.querySelectorAll(sel).forEach(function(e){var r=e.getBoundingClientRect(),t=(e.innerText||'').trim();
     if(r.width>0&&r.height>0&&r.height<70&&r.width<vw*0.7&&t.length>0&&t.length<40)authors.push(R(e));});
+  var imgs=[];
+  document.querySelectorAll('img,video,iframe,canvas').forEach(function(e){var r=e.getBoundingClientRect();if(r.width>vw*0.3&&r.height>60)imgs.push(R(e));});
   var cands=[];
   document.querySelectorAll('article,[class*="content"],[class*="Content"],[class*="view"],[class*="View"],[class*="article"],[class*="post"],[class*="read"],[class*="body"],[class*="txt"],[id*="content"],[id*="view"]').forEach(function(e){
     var r=e.getBoundingClientRect(); if(r.width<vw*0.6||r.height<80)return;
@@ -62,7 +65,7 @@ private fun analyzeJs(title: String) = """
   if(key.length>2){var ts=document.querySelectorAll('h1,h2,h3,h4,[class*="title"],[class*="subject"],[class*="tit"]');
     for(var i=0;i<ts.length;i++){if((ts[i].innerText||'').indexOf(key)>=0){var tr=ts[i].getBoundingClientRect();if(tr.height>0&&tr.height<300){titleR=R(ts[i]);break;}}}}
   return JSON.stringify({w:Math.max(d.scrollWidth,document.body.scrollWidth),h:Math.max(d.scrollHeight,document.body.scrollHeight),
-    authors:authors.slice(0,80),content:best?R(best.e):null,title:titleR,text:best?(best.e.innerText||'').slice(0,2000):''});
+    authors:authors.slice(0,80),imgs:imgs.slice(0,200),content:best?R(best.e):null,title:titleR,text:best?(best.e.innerText||'').slice(0,2000):''});
 })()
 """
 
@@ -112,10 +115,11 @@ fun PageScanner(post: Post, attempt: Int, onState: (ScanState) -> Unit) {
                     ((it.getDouble(0) + it.getDouble(2)) * scale).toInt(), ((it.getDouble(1) + it.getDouble(3)) * scale).toInt())
             }
             val authors = info?.optJSONArray("authors")?.let { arr -> (0 until arr.length()).mapNotNull { rect(arr.optJSONArray(it)) } }.orEmpty()
+            val images = info?.optJSONArray("imgs")?.let { arr -> (0 until arr.length()).mapNotNull { rect(arr.optJSONArray(it)) } }.orEmpty()
             var content = rect(info?.optJSONArray("content"))
             val title = rect(info?.optJSONArray("title"))
             if (content != null && title != null && title.top < content.top) content = Rect(content.left, title.top, content.right, content.bottom)
-            onState(ScanState.Done(ScanResult(bmp, fullPx > MAX_SCAN_HEIGHT_PX, authors, content, info?.optString("text").orEmpty())))
+            onState(ScanState.Done(ScanResult(bmp, fullPx > MAX_SCAN_HEIGHT_PX, authors, content, images, info?.optString("text").orEmpty())))
         } catch (e: OutOfMemoryError) {
             onState(ScanState.Failed("글이 너무 길어서 캡처하지 못했어요"))
         } catch (e: Exception) {

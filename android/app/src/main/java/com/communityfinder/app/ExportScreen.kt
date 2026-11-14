@@ -115,11 +115,13 @@ private fun ExportDetail(post: Post, source: Source?, onBack: () -> Unit) {
         if (done == null) return@LaunchedEffect
         result = withContext(Dispatchers.Default) {
             val masked = if (mosaicOn) ThreadsKit.mosaic(done.bitmap, done.authorRects) else done.bitmap
-            val body = ThreadsKit.crop(masked, done.contentRect)
-            val pieces = ThreadsKit.split(body)
+            val c = ThreadsKit.cropRect(masked, done.contentRect)
+            val body = Bitmap.createBitmap(masked, c.left, c.top, c.width(), c.height())
+            // 사진·영상 영역 안에서는 자르지 않도록 위치 전달
+            val pieces = ThreadsKit.split(body, done.imageRects.map { (it.top - c.top)..(it.bottom - c.top) })
             ExportResult(pieces, ThreadsKit.writeCache(ctx, post.id, pieces), done.text)
         }
-        if (review.isEmpty()) review = ThreadsKit.review(post, sourceName, done.text, variant)
+        if (review.isEmpty()) review = ThreadsKit.review(post, done.text, variant)
     }
 
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
@@ -168,7 +170,7 @@ private fun ExportDetail(post: Post, source: Source?, onBack: () -> Unit) {
                             OutlinedTextField(review, { review = it }, Modifier.fillMaxWidth(), textStyle = LocalTextStyle.current.copy(fontSize = 14.sp, lineHeight = 20.sp))
                             Spacer(Modifier.height(8.dp))
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                OutlinedButton(onClick = { variant++; review = ThreadsKit.review(post, sourceName, done?.text.orEmpty(), variant) }) {
+                                OutlinedButton(onClick = { variant++; review = ThreadsKit.review(post, done?.text.orEmpty(), variant) }) {
                                     Icon(Icons.Filled.Refresh, null, Modifier.size(18.dp)); Spacer(Modifier.width(4.dp)); Text("다른 예시")
                                 }
                                 Button(onClick = { ThreadsKit.copy(ctx, "감상평", review) }) {
