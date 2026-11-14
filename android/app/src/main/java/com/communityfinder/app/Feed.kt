@@ -1,0 +1,118 @@
+package com.communityfinder.app
+
+import android.content.Context
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import org.json.JSONObject
+import java.io.File
+import java.net.HttpURLConnection
+import java.net.URL
+
+data class Source(
+    val id: String,
+    val name: String,
+    val board: String,
+    val color: Long,
+    val ok: Boolean,
+    val error: String?,
+)
+
+data class Post(
+    val id: String,
+    val source: String,
+    val title: String,
+    val url: String,
+    val views: Int?,
+    val comments: Int?,
+    val likes: Int?,
+    val score: Int,
+    val viewsPerMin: Int,
+    val firstSeenAt: Long,
+)
+
+data class Feed(val updatedAt: Long, val sources: List<Source>, val posts: List<Post>) {
+    val sourceById: Map<String, Source> by lazy { sources.associateBy { it.id } }
+
+    companion object {
+        fun parse(json: String): Feed {
+            val o = JSONObject(json)
+            val sources = o.getJSONArray("sources").let { arr ->
+                (0 until arr.length()).map { i ->
+                    val s = arr.getJSONObject(i)
+                    val st = s.optJSONObject("status")
+                    Source(
+                        id = s.getString("id"),
+                        name = s.getString("name"),
+                        board = s.optString("board"),
+                        color = parseColor(s.optString("color")),
+                        ok = st?.optBoolean("ok", false) ?: false,
+                        error = st?.optString("error")?.takeIf { it.isNotEmpty() },
+                    )
+                }
+            }
+            val posts = o.getJSONArray("posts").let { arr ->
+                (0 until arr.length()).map { i ->
+                    val p = arr.getJSONObject(i)
+                    Post(
+                        id = p.getString("id"),
+                        source = p.getString("source"),
+                        title = p.getString("title"),
+                        url = p.getString("url"),
+                        views = p.optIntOrNull("views"),
+                        comments = p.optIntOrNull("comments"),
+                        likes = p.optIntOrNull("likes"),
+                        score = p.optInt("score", 0),
+                        viewsPerMin = p.optInt("viewsPerMin", 0),
+                        firstSeenAt = p.optLong("firstSeenAt", 0),
+                    )
+                }
+            }
+            return Feed(o.optLong("updatedAt", 0), sources, posts)
+        }
+
+        private fun JSONObject.optIntOrNull(key: String): Int? =
+            if (!has(key) || isNull(key)) null else optInt(key)
+
+        private fun parseColor(hex: String): Long =
+            hex.removePrefix("#").takeIf { it.length == 6 }?.toLongOrNull(16)?.let { 0xFF000000 or it }
+                ?: 0xFF888888
+    }
+}
+
+object FeedRepository {
+    private fun cacheFile(ctx: Context) = File(ctx.filesDir, "posts.json")
+
+    /** 클라우드에서 최신 피드를 받아오고, 성공하면 캐시에 저장 */
+    suspend fun fetch(ctx: Context): Feed = withContext(Dispatchers.IO) {
+        val url = Prefs(ctx).feedUrl
+        // raw.githubusercontent.com 캐시를 피하려고 쿼리 추가
+        val conn = URL("$url?t=${System.currentTimeMillis() / 60000}").openConnection() as HttpURLConnection
+        conn.connectTimeout = 15000
+        conn.readTimeout = 20000
+        conn.setRequestProperty("Accept", "application/json")
+        try {
+            if (conn.responseCode != 200) {
+                throw Exception(
+                    if (conn.responseCode == 404) "아직 클라우드 데이터가 없어요 (수집기가 한 번도 실행되지 않음)"
+                    else "서버 응답 ${conn.responseCode}",
+                )
+            }
+            val text = conn.inputStream.bufferedReader().use { it.readText() }
+            val feed = Feed.parse(text)
+            cacheFile(ctx).writeText(text)
+            feed
+        } finally {
+            conn.disconnect()
+        }
+    }
+
+    fun cached(ctx: Context): Feed? = runCatching { Feed.parse(cacheFile(ctx).readText()) }.getOrNull()
+}
+
+/** 알림 조건: 선택한 커뮤니티의 새 글 중 (화제도 >= 기준) 또는 (제목에 키워드 포함) */
+fun matchesAlert(post: Post, minScore: Int, keywords: List<String>, mutedSources: Set<String>): Boolean {
+    if (post.source in mutedSources) return false
+    val title = post.title.lowercase()
+    if (keywords.any { it.isNotBlank() && title.contains(it.trim().lowercase()) }) return true
+    return post.score >= minScore
+}

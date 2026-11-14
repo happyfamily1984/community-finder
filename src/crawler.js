@@ -16,7 +16,7 @@ export class Crawler {
     this.posts = new Map();
     this.status = {}; // source id -> { ok, count, error, at }
     this.lastCrawlAt = null;
-    this.file = dataDir ? path.join(dataDir, 'posts.json') : null;
+    this.file = dataDir ? path.join(dataDir, 'state.json') : null;
     this.load();
   }
 
