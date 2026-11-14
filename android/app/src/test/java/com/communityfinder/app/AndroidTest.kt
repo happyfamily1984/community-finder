@@ -50,19 +50,19 @@ class AndroidTest {
 
     @Test
     fun feedScreenLight() {
-        compose.setContent { AppTheme(dark = false) { FeedScreen(feed(), null, false, {}, {}) } }
+        compose.setContent { AppTheme(dark = false) { HomeScreen(feed(), null, false, emptySet(), {}, {}, {}, {}) } }
         compose.onRoot().captureRoboImage("build/screens/feed-light.png")
     }
 
     @Test
     fun feedScreenDark() {
-        compose.setContent { AppTheme(dark = true) { FeedScreen(feed(), null, false, {}, {}) } }
+        compose.setContent { AppTheme(dark = true) { HomeScreen(feed(), null, false, emptySet(), {}, {}, {}, {}) } }
         compose.onRoot().captureRoboImage("build/screens/feed-dark.png")
     }
 
     @Test
     fun settingsScreen() {
-        compose.setContent { AppTheme(dark = false) { SettingsScreen(feed(), {}) } }
+        compose.setContent { AppTheme(dark = false) { SettingsScreen(feed()) } }
         compose.onRoot().captureRoboImage("build/screens/settings.png")
     }
 }

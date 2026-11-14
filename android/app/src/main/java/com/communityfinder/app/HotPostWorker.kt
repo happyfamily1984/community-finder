@@ -100,7 +100,7 @@ class HotPostWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ct
                 )
                 val n = NotificationCompat.Builder(ctx, CHANNEL_ID)
                     .setSmallIcon(R.drawable.ic_notify)
-                    .setColor(0xFFFF5A36.toInt())
+                    .setColor(0xFF5B3DF5.toInt())
                     .setContentTitle("🔥 $src · 화제도 ${p.score}")
                     .setContentText(p.title)
                     .setStyle(NotificationCompat.BigTextStyle().bigText(p.title))
@@ -120,7 +120,7 @@ class HotPostWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ct
                 )
                 val summary = NotificationCompat.Builder(ctx, CHANNEL_ID)
                     .setSmallIcon(R.drawable.ic_notify)
-                    .setColor(0xFFFF5A36.toInt())
+                    .setColor(0xFF5B3DF5.toInt())
                     .setContentTitle("새 화제글 ${posts.size}개")
                     .setStyle(
                         NotificationCompat.InboxStyle().also { s -> posts.take(6).forEach { s.addLine(it.title) } },

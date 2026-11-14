@@ -1,47 +1,67 @@
 package com.communityfinder.app
 
-import android.Manifest
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import android.os.Build
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
-import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.outlined.ChatBubbleOutline
+import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.StarOutline
+import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 
-private val Accent = Color(0xFFFF5A36)
+// 디자인 시안 색상
+val Purple = Color(0xFF5B3DF5)
+private val HotRed = Color(0xFFF0304F)
+private val HotOrange = Color(0xFFFF7A1A)
+private val CalmPurple = Color(0xFF8E5CF7)
+private val SortBg = Color(0xFFFFEFE6)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -55,14 +75,33 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun AppTheme(dark: Boolean = isSystemInDarkTheme(), content: @Composable () -> Unit) {
     val scheme = if (dark) {
-        darkColorScheme(primary = Accent, background = Color(0xFF111114), surface = Color(0xFF111114), surfaceContainer = Color(0xFF1B1B20))
+        darkColorScheme(
+            primary = Color(0xFF8C78FF), background = Color(0xFF111118), surface = Color(0xFF111118),
+            surfaceContainer = Color(0xFF1C1B26), outlineVariant = Color(0xFF2E2C3C),
+        )
     } else {
-        lightColorScheme(primary = Accent, background = Color(0xFFF6F6F8), surface = Color(0xFFF6F6F8), surfaceContainer = Color.White)
+        lightColorScheme(
+            primary = Purple, background = Color(0xFFF5F4FB), surface = Color(0xFFF5F4FB),
+            surfaceContainer = Color.White, onSurfaceVariant = Color(0xFF8A889C), outlineVariant = Color(0xFFE6E3F3),
+        )
     }
     MaterialTheme(colorScheme = scheme, content = content)
 }
 
-enum class SortBy(val label: String) { SCORE("🔥 화제도"), SURGE("🚀 급상승"), VIEWS("👀 조회"), COMMENTS("💬 댓글"), LIKES("👍 추천"), LATEST("🕒 최신") }
+enum class Tab(val label: String, val on: ImageVector, val off: ImageVector) {
+    HOME("홈", Icons.Filled.Home, Icons.Outlined.Home),
+    FAVORITES("즐겨찾기", Icons.Filled.Star, Icons.Outlined.StarOutline),
+    RECENT("최근 본 글", Icons.Outlined.History, Icons.Outlined.History),
+    SETTINGS("설정", Icons.Filled.Settings, Icons.Outlined.Settings),
+}
+
+enum class SortBy(val label: String) { SCORE("화제도"), SURGE("급상승"), VIEWS("조회수"), COMMENTS("댓글"), LIKES("추천"), LATEST("최신") }
+
+/** 글 열기: 브라우저로 열고 최근 본 글에 기록 */
+fun openPost(ctx: Context, p: Post) {
+    PostStore.recent(ctx).add(p)
+    ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(p.url)))
+}
 
 @Composable
 fun App() {
@@ -70,7 +109,9 @@ fun App() {
     var feed by remember { mutableStateOf(FeedRepository.cached(ctx)) }
     var error by remember { mutableStateOf<String?>(null) }
     var loading by remember { mutableStateOf(false) }
-    var showSettings by rememberSaveable { mutableStateOf(false) }
+    var tab by rememberSaveable { mutableStateOf(Tab.HOME) }
+    // 즐겨찾기/최근 목록이 바뀌면 화면 갱신
+    var storeVersion by remember { mutableIntStateOf(0) }
     val scope = rememberCoroutineScope()
 
     fun refresh() {
@@ -86,19 +127,92 @@ fun App() {
         }
     }
     LaunchedEffect(Unit) { refresh() }
+    if (tab != Tab.HOME) BackHandler { tab = Tab.HOME }
 
-    if (showSettings) {
-        BackHandler { showSettings = false }
-        SettingsScreen(feed, onBack = { showSettings = false })
-    } else {
-        FeedScreen(feed, error, loading, onRefresh = ::refresh, onSettings = { showSettings = true })
+    val favIds = remember(storeVersion) { PostStore.favorites(ctx).all().map { it.id }.toSet() }
+    val toggleFav: (Post) -> Unit = { p ->
+        val store = PostStore.favorites(ctx)
+        if (p.id in favIds) {
+            store.remove(p.id); Toast.makeText(ctx, "즐겨찾기에서 뺐어요", Toast.LENGTH_SHORT).show()
+        } else {
+            store.add(p); Toast.makeText(ctx, "즐겨찾기에 추가했어요", Toast.LENGTH_SHORT).show()
+        }
+        storeVersion++
+    }
+    val open: (Post) -> Unit = { openPost(ctx, it); storeVersion++ }
+
+    Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
+        bottomBar = { BottomBar(tab) { tab = it } },
+    ) { pad ->
+        Box(Modifier.padding(pad).fillMaxSize()) {
+            when (tab) {
+                Tab.HOME -> HomeScreen(feed, error, loading, favIds, ::refresh, open, toggleFav, onBell = { tab = Tab.SETTINGS })
+                Tab.FAVORITES -> SavedScreen(
+                    title = "즐겨찾기",
+                    posts = remember(storeVersion) { PostStore.favorites(ctx).all() },
+                    empty = "아직 즐겨찾기한 글이 없어요.\n홈에서 글을 길게 누르면 추가돼요.",
+                    feed = feed, favIds = favIds, onOpen = open, onLongPress = toggleFav,
+                )
+                Tab.RECENT -> SavedScreen(
+                    title = "최근 본 글",
+                    posts = remember(storeVersion) { PostStore.recent(ctx).all() },
+                    empty = "최근에 본 글이 없어요.",
+                    feed = feed, favIds = favIds, onOpen = open, onLongPress = toggleFav,
+                    action = "기록 지우기" to { PostStore.recent(ctx).clear(); storeVersion++ },
+                )
+                Tab.SETTINGS -> SettingsScreen(feed)
+            }
+        }
+    }
+}
+
+@Composable
+fun BottomBar(current: Tab, onSelect: (Tab) -> Unit) {
+    NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainer, tonalElevation = 0.dp) {
+        Tab.entries.forEach { t ->
+            val sel = t == current
+            NavigationBarItem(
+                selected = sel,
+                onClick = { onSelect(t) },
+                icon = { Icon(if (sel) t.on else t.off, null) },
+                label = { Text(t.label, fontSize = 12.sp, fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal) },
+                colors = NavigationBarItemDefaults.colors(
+                    selectedIconColor = MaterialTheme.colorScheme.primary,
+                    selectedTextColor = MaterialTheme.colorScheme.primary,
+                    indicatorColor = Color.Transparent,
+                    unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                ),
+            )
+        }
+    }
+}
+
+@Composable
+fun Header(showDot: Boolean, onBell: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 10.dp, bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Image(painterResource(R.drawable.app_logo), null, Modifier.size(38.dp).clip(RoundedCornerShape(10.dp)))
+        Spacer(Modifier.width(10.dp))
+        Text("커뮤니티 파인더", fontSize = 21.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.weight(1f))
+        IconButton(onClick = onBell) {
+            Box {
+                Icon(Icons.Filled.Notifications, "알림 설정", tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f))
+                if (showDot) Box(Modifier.align(Alignment.TopEnd).size(8.dp).background(HotRed, CircleShape))
+            }
+        }
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun FeedScreen(feed: Feed?, error: String?, loading: Boolean, onRefresh: () -> Unit, onSettings: () -> Unit) {
-    val ctx = LocalContext.current
+fun HomeScreen(
+    feed: Feed?, error: String?, loading: Boolean, favIds: Set<String>,
+    onRefresh: () -> Unit, onOpen: (Post) -> Unit, onLongPress: (Post) -> Unit, onBell: () -> Unit,
+) {
     var source by rememberSaveable { mutableStateOf("") }
     var sort by rememberSaveable { mutableStateOf(SortBy.SCORE) }
     var query by rememberSaveable { mutableStateOf("") }
@@ -117,50 +231,35 @@ fun FeedScreen(feed: Feed?, error: String?, loading: Boolean, onRefresh: () -> U
             SortBy.LATEST -> list.sortedByDescending { it.firstSeenAt }
         }
     }
+    val hasNew = remember(feed) { feed?.posts?.any { System.currentTimeMillis() - it.firstSeenAt < 15 * 60_000 } == true }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("커뮤니티 파인더", fontWeight = FontWeight.Bold) },
-                actions = {
-                    IconButton(onClick = onSettings) { Icon(Icons.Filled.Notifications, "알림 설정") }
-                },
-            )
-        },
-    ) { pad ->
-        PullToRefreshBox(isRefreshing = loading, onRefresh = onRefresh, modifier = Modifier.padding(pad).fillMaxSize()) {
-            LazyColumn(contentPadding = PaddingValues(bottom = 24.dp), modifier = Modifier.fillMaxSize()) {
+    Column(Modifier.fillMaxSize().statusBarsPadding()) {
+        Header(hasNew, onBell)
+        PullToRefreshBox(isRefreshing = loading, onRefresh = onRefresh, modifier = Modifier.fillMaxSize()) {
+            LazyColumn(contentPadding = PaddingValues(bottom = 12.dp), modifier = Modifier.fillMaxSize()) {
                 item {
                     LazyRow(
-                        contentPadding = PaddingValues(horizontal = 16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        item { FilterChip(selected = source == "", onClick = { source = "" }, label = { Text("전체") }) }
+                        item { SourceChip("전체", null, source == "", ok = true) { source = "" } }
                         items(feed?.sources.orEmpty()) { s ->
-                            FilterChip(
-                                selected = source == s.id,
-                                onClick = { source = s.id },
-                                enabled = true,
-                                label = { Text(if (s.ok) s.name else "${s.name} ⚠") },
-                                leadingIcon = { Box(Modifier.size(8.dp).background(Color(s.color), CircleShape)) },
-                            )
+                            SourceChip(s.name, Color(s.color), source == s.id, s.ok) { source = s.id }
                         }
                     }
                 }
                 item {
-                    Row(Modifier.padding(horizontal = 16.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                        OutlinedTextField(
-                            value = query,
-                            onValueChange = { query = it },
-                            placeholder = { Text("제목 검색") },
-                            leadingIcon = { Icon(Icons.Filled.Search, null) },
-                            singleLine = true,
-                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                            modifier = Modifier.weight(1f),
-                        )
+                    Row(Modifier.padding(horizontal = 16.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                        SearchPill(query, { query = it }, Modifier.weight(1f))
                         Spacer(Modifier.width(8.dp))
                         Box {
-                            OutlinedButton(onClick = { sortMenu = true }) { Text(sort.label) }
+                            Surface(onClick = { sortMenu = true }, shape = CircleShape, color = SortBg, modifier = Modifier.height(44.dp)) {
+                                Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Text("🔥", fontSize = 16.sp)
+                                    Spacer(Modifier.width(4.dp))
+                                    Text(sort.label, color = HotOrange, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                                }
+                            }
                             DropdownMenu(expanded = sortMenu, onDismissRequest = { sortMenu = false }) {
                                 SortBy.entries.forEach {
                                     DropdownMenuItem(text = { Text(it.label) }, onClick = { sort = it; sortMenu = false })
@@ -173,24 +272,99 @@ fun FeedScreen(feed: Feed?, error: String?, loading: Boolean, onRefresh: () -> U
 
                 if (posts.isEmpty()) {
                     item {
-                        Text(
+                        EmptyText(
                             when {
                                 feed == null && error == null -> "불러오는 중…"
                                 feed == null -> "데이터를 받지 못했어요. 아래로 당겨 다시 시도하세요."
                                 else -> "표시할 글이 없어요"
                             },
-                            Modifier.fillMaxWidth().padding(40.dp),
-                            textAlign = TextAlign.Center,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }
                 items(posts, key = { it.id }) { p ->
-                    PostCard(p, feed?.sourceById?.get(p.source)) {
-                        ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(p.url)))
-                    }
+                    PostCard(p, feed?.sourceById?.get(p.source), p.id in favIds, { onOpen(p) }, { onLongPress(p) })
                 }
             }
+        }
+    }
+}
+
+@Composable
+fun SavedScreen(
+    title: String, posts: List<Post>, empty: String, feed: Feed?, favIds: Set<String>,
+    onOpen: (Post) -> Unit, onLongPress: (Post) -> Unit, action: Pair<String, () -> Unit>? = null,
+) {
+    Column(Modifier.fillMaxSize().statusBarsPadding()) {
+        Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 8.dp, top = 14.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(title, fontSize = 21.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.weight(1f))
+            if (action != null && posts.isNotEmpty()) TextButton(onClick = action.second) { Text(action.first) }
+        }
+        LazyColumn(contentPadding = PaddingValues(bottom = 12.dp)) {
+            if (posts.isEmpty()) item { EmptyText(empty) }
+            items(posts, key = { it.id }) { p ->
+                PostCard(p, feed?.sourceById?.get(p.source) ?: knownSource(p.source), p.id in favIds, { onOpen(p) }, { onLongPress(p) })
+            }
+        }
+    }
+}
+
+private fun knownSource(id: String): Source? = if (id == FmkoreaLocal.ID) FmkoreaLocal.SOURCE_TEMPLATE else null
+
+@Composable
+fun EmptyText(text: String) {
+    Text(
+        text, Modifier.fillMaxWidth().padding(40.dp), textAlign = TextAlign.Center,
+        color = MaterialTheme.colorScheme.onSurfaceVariant, lineHeight = 22.sp,
+    )
+}
+
+@Composable
+fun SourceChip(label: String, dot: Color?, selected: Boolean, ok: Boolean, onClick: () -> Unit) {
+    Surface(
+        onClick = onClick,
+        shape = CircleShape,
+        color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainer,
+        modifier = Modifier
+            .height(38.dp)
+            .then(if (selected) Modifier else Modifier.border(1.dp, MaterialTheme.colorScheme.outlineVariant, CircleShape)),
+    ) {
+        Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (dot != null) {
+                Box(Modifier.size(8.dp).background(if (selected) Color.White else dot, CircleShape))
+                Spacer(Modifier.width(7.dp))
+            }
+            Text(
+                if (ok) label else "$label ⚠",
+                fontSize = 14.sp,
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                color = if (selected) Color.White else MaterialTheme.colorScheme.onSurface.copy(alpha = if (ok) 0.85f else 0.45f),
+            )
+        }
+    }
+}
+
+@Composable
+fun SearchPill(value: String, onChange: (String) -> Unit, modifier: Modifier = Modifier) {
+    val muted = MaterialTheme.colorScheme.onSurfaceVariant
+    Row(
+        modifier
+            .height(44.dp)
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.surfaceContainer)
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, CircleShape)
+            .padding(horizontal = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(Icons.Outlined.Search, null, tint = muted, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(8.dp))
+        Box(Modifier.weight(1f)) {
+            if (value.isEmpty()) Text("제목 검색", color = muted, fontSize = 15.sp)
+            BasicTextField(
+                value = value, onValueChange = onChange, singleLine = true,
+                textStyle = TextStyle(fontSize = 15.sp, color = MaterialTheme.colorScheme.onSurface),
+                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                modifier = Modifier.fillMaxWidth(),
+            )
         }
     }
 }
@@ -203,204 +377,82 @@ fun StatusLine(feed: Feed?, error: String?) {
         if (failed.isNotEmpty()) add("수집 실패: ${failed.joinToString()}")
         if (error != null) add("⚠ $error")
     }
-    if (parts.isNotEmpty()) {
-        Text(
-            parts.joinToString(" · "),
-            fontSize = 12.sp,
-            color = if (error != null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
-        )
+    if (parts.isEmpty()) return
+    val color = if (error != null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+    Row(Modifier.padding(horizontal = 18.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Icon(Icons.Outlined.History, null, tint = color, modifier = Modifier.size(15.dp))
+        Spacer(Modifier.width(5.dp))
+        Text(parts.joinToString(" · "), fontSize = 12.sp, color = color, maxLines = 2)
     }
 }
 
+fun scoreColor(score: Int) = when {
+    score >= 85 -> HotRed
+    score >= 75 -> HotOrange
+    else -> CalmPurple
+}
+
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun PostCard(p: Post, src: Source?, onClick: () -> Unit) {
-    Card(
-        onClick = onClick,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+fun PostCard(p: Post, src: Source?, favorite: Boolean, onClick: () -> Unit, onLongClick: () -> Unit) {
+    val muted = MaterialTheme.colorScheme.onSurfaceVariant
+    val accent = scoreColor(p.score)
+    val srcColor = src?.let { Color(it.color) } ?: Color.Gray
+    Row(
+        Modifier
+            .padding(horizontal = 14.dp, vertical = 3.dp)
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainer)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+            .height(IntrinsicSize.Min),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.width(44.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        // 왼쪽 색 막대
+        Box(Modifier.width(4.dp).fillMaxHeight().background(accent))
+        Column(Modifier.width(54.dp).padding(vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text("${p.score}", fontWeight = FontWeight.ExtraBold, fontSize = 22.sp, color = accent, lineHeight = 24.sp)
+            Text("화제도", fontSize = 10.sp, color = muted, lineHeight = 12.sp)
+        }
+        Box(Modifier.width(1.dp).height(30.dp).background(MaterialTheme.colorScheme.outlineVariant))
+        Column(Modifier.weight(1f).padding(start = 12.dp, top = 8.dp, bottom = 8.dp)) {
+            // 제목: 줄간격을 좁혀 한 화면에 더 많은 글이 보이도록
+            Text(
+                p.title, fontSize = 15.sp, lineHeight = 19.sp, fontWeight = FontWeight.SemiBold,
+                maxLines = 2, overflow = TextOverflow.Ellipsis,
+            )
+            Spacer(Modifier.height(4.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    "${p.score}",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 18.sp,
-                    color = if (p.score >= 80) Color(0xFFFF3B30) else MaterialTheme.colorScheme.onSurface,
+                    src?.name ?: p.source, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = srcColor,
+                    modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(srcColor.copy(alpha = 0.12f))
+                        .padding(horizontal = 6.dp, vertical = 1.dp),
                 )
-                Text("화제도", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            Spacer(Modifier.width(10.dp))
-            Column(Modifier.weight(1f)) {
-                Text(p.title, fontSize = 15.sp, lineHeight = 21.sp)
-                Spacer(Modifier.height(4.dp))
-                val meta = buildList {
-                    p.views?.let { add("👀 ${fmt(it)}") }
-                    p.comments?.let { add("💬 ${fmt(it)}") }
-                    p.likes?.let { add("👍 ${fmt(it)}") }
-                    if (p.viewsPerMin >= 50) add("🚀 분당 ${fmt(p.viewsPerMin)}")
-                    add(ago(p.firstSeenAt))
+                if (System.currentTimeMillis() - p.firstSeenAt < 15 * 60_000) {
+                    Text(" NEW", fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, color = HotRed)
                 }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        src?.name ?: p.source,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = src?.let { Color(it.color) } ?: Color.Gray,
-                    )
-                    if (System.currentTimeMillis() - p.firstSeenAt < 15 * 60_000) {
-                        Text("  NEW", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Accent)
-                    }
-                    Text(
-                        "  " + meta.joinToString("  "),
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                    )
+                p.views?.let { Stat(Icons.Outlined.Visibility, fmt(it)) }
+                p.comments?.let { Stat(Icons.Outlined.ChatBubbleOutline, fmt(it)) }
+                p.likes?.let { Spacer(Modifier.width(8.dp)); Text("👍 ${fmt(it)}", fontSize = 12.sp, color = muted, maxLines = 1) }
+                if (p.viewsPerMin >= 50) {
+                    Text("  🚀${fmt(p.viewsPerMin)}/분", fontSize = 12.sp, color = HotOrange, fontWeight = FontWeight.SemiBold, maxLines = 1)
                 }
+                Text("  " + ago(p.firstSeenAt), fontSize = 12.sp, color = muted, maxLines = 1, overflow = TextOverflow.Clip)
             }
+        }
+        Column(Modifier.padding(end = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            if (favorite) Icon(Icons.Filled.Star, "즐겨찾기", tint = Color(0xFFFFB800), modifier = Modifier.size(14.dp))
+            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = muted.copy(alpha = 0.6f))
         }
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(feed: Feed?, onBack: () -> Unit) {
-    val ctx = LocalContext.current
-    val prefs = remember { Prefs(ctx) }
-    var enabled by remember { mutableStateOf(prefs.notifyEnabled && HotPostWorker.canNotify(ctx)) }
-    var minScore by remember { mutableFloatStateOf(prefs.minScore.toFloat()) }
-    var keywords by remember { mutableStateOf(prefs.keywordsText) }
-    var muted by remember { mutableStateOf(prefs.mutedSources) }
-    var interval by remember { mutableIntStateOf(prefs.intervalMin) }
-    var feedUrl by remember { mutableStateOf(prefs.feedUrl) }
-    var fmLocal by remember { mutableStateOf(prefs.fmkoreaLocal) }
-    var message by remember { mutableStateOf<String?>(null) }
-
-    fun apply() {
-        prefs.notifyEnabled = enabled
-        prefs.minScore = minScore.toInt()
-        prefs.keywordsText = keywords
-        prefs.mutedSources = muted
-        prefs.intervalMin = interval
-        HotPostWorker.schedule(ctx)
-    }
-
-    val permLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        enabled = granted
-        message = if (granted) null else "알림 권한이 거부됐어요. 휴대폰 설정 > 앱 > 커뮤니티 파인더에서 알림을 허용해주세요."
-        apply()
-    }
-
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("알림 설정") },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "뒤로") } },
-            )
-        },
-    ) { pad ->
-        Column(
-            Modifier.padding(pad).padding(horizontal = 20.dp).verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("화제글 알림", fontWeight = FontWeight.SemiBold, fontSize = 17.sp)
-                    Text(
-                        "새 글이 베스트에 오르면, 아래 조건에 맞는 글만 알려드려요.",
-                        fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Switch(checked = enabled, onCheckedChange = { on ->
-                    if (on && Build.VERSION.SDK_INT >= 33 && !HotPostWorker.canNotify(ctx)) {
-                        permLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                    } else {
-                        enabled = on
-                        apply()
-                    }
-                })
-            }
-            message?.let { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 13.sp) }
-
-            HorizontalDivider()
-            Text("화제도 ${minScore.toInt()}점 이상", fontWeight = FontWeight.SemiBold)
-            Slider(
-                value = minScore, onValueChange = { minScore = it }, onValueChangeFinished = ::apply,
-                valueRange = 50f..100f, steps = 9,
-            )
-
-            Text("키워드 알림", fontWeight = FontWeight.SemiBold)
-            OutlinedTextField(
-                value = keywords,
-                onValueChange = { keywords = it; apply() },
-                placeholder = { Text("예: 아이폰, 로또, 손흥민") },
-                supportingText = { Text("쉼표로 구분 · 제목에 들어가면 점수와 상관없이 알림") },
-                modifier = Modifier.fillMaxWidth(),
-            )
-
-            Text("알림 받을 커뮤니티", fontWeight = FontWeight.SemiBold)
-            feed?.sources?.forEach { s ->
-                Row(
-                    Modifier.fillMaxWidth().clickable {
-                        muted = if (s.id in muted) muted - s.id else muted + s.id
-                        apply()
-                    },
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Checkbox(checked = s.id !in muted, onCheckedChange = null)
-                    Spacer(Modifier.width(8.dp))
-                    Text("${s.name} · ${s.board}")
-                }
-            } ?: Text("피드를 받은 뒤에 선택할 수 있어요", color = MaterialTheme.colorScheme.onSurfaceVariant)
-
-            HorizontalDivider()
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("에펨코리아 휴대폰에서 가져오기", fontWeight = FontWeight.SemiBold)
-                    Text(
-                        "에펨코리아는 클라우드 서버 접근을 막아서, 이 휴대폰에서 15분에 한 번 포텐 목록만 받아와요. " +
-                            "에펨코리아가 접근을 제한하면 알려준 시간만큼 쉬었다가 다시 시도해요.",
-                        fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Switch(checked = fmLocal, onCheckedChange = { fmLocal = it; prefs.fmkoreaLocal = it })
-            }
-
-            Text("확인 주기", fontWeight = FontWeight.SemiBold)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf(15, 30, 60).forEach { m ->
-                    FilterChip(selected = interval == m, onClick = { interval = m; apply() }, label = { Text("${m}분") })
-                }
-            }
-            Text(
-                "안드로이드 배터리 정책상 최소 15분이며, 절전 모드에서는 더 늦어질 수 있어요.",
-                fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-
-            OutlinedButton(
-                onClick = {
-                    val top = feed?.posts?.maxByOrNull { it.score }
-                    if (!HotPostWorker.canNotify(ctx)) {
-                        message = "먼저 알림을 켜주세요."
-                    } else if (feed != null && top != null) {
-                        HotPostWorker.notify(ctx, feed, listOf(top))
-                    }
-                },
-            ) { Text("테스트 알림 보내기") }
-
-            HorizontalDivider()
-            Text("고급: 클라우드 피드 주소", fontWeight = FontWeight.SemiBold)
-            OutlinedTextField(
-                value = feedUrl,
-                onValueChange = { feedUrl = it; prefs.feedUrl = it },
-                singleLine = true,
-                textStyle = LocalTextStyle.current.copy(fontSize = 12.sp),
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Spacer(Modifier.height(24.dp))
-        }
-    }
+private fun Stat(icon: ImageVector, text: String) {
+    val muted = MaterialTheme.colorScheme.onSurfaceVariant
+    Spacer(Modifier.width(8.dp))
+    Icon(icon, null, tint = muted, modifier = Modifier.size(13.dp))
+    Text(" $text", fontSize = 12.sp, color = muted, maxLines = 1)
 }
 
 fun fmt(n: Int): String = when {
