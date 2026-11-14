@@ -55,11 +55,10 @@ object ThreadsKit {
         val maxH = w * 2 // 한 장으로 둘 수 있는 최대 길이 (가로의 2배)
         if (h <= maxH) return listOf(top, bottom)
 
-        val n = Math.ceil(h / (w * 1.6)).toInt().coerceIn(2, MAX_PIECES)
-        val ideal = h.toFloat() / n
-        fun inAvoid(y: Int) = avoid.firstOrNull { y > it.first && y < it.last }
+        // 사진 안에서는 자르지 않음. 단, 한 장에 다 안 들어가는 긴 사진(글 캡처 이미지 등)은 그 안의 여백에서 자를 수 있음
+        fun inAvoid(y: Int) = avoid.firstOrNull { y > it.first && y < it.last && it.last - it.first < maxH }
 
-        // 자를 수 있는 후보: 6px 이상 이어진 빈 줄의 가운데
+        // 자를 수 있는 후보: 4px 이상 이어진 빈 줄의 가운데
         val cands = mutableListOf<Pair<Int, Int>>() // (위치, 여백 길이)
         var y = top
         while (y < bottom) {
@@ -67,30 +66,28 @@ object ThreadsKit {
                 val s = y
                 while (y < bottom && blank[y]) y++
                 val mid = (s + y) / 2
-                if (y - s >= 6 && inAvoid(mid) == null) cands += mid to (y - s)
+                if (y - s >= 4 && inAvoid(mid) == null) cands += mid to (y - s)
             } else y++
         }
 
+        // 앞에서부터 한 장씩: 남은 길이가 한 장에 들어가면 끝, 아니면 목표 길이에 가장 가까운 여백에서 자름
         val cuts = mutableListOf(top)
-        for (i in 1 until n) {
-            val target = (top + ideal * i).toInt()
+        while (cuts.size < MAX_PIECES) {
             val prev = cuts.last()
-            val best = cands
-                .filter { Math.abs(it.first - target) <= ideal * 0.4f && it.first - prev >= ideal * 0.45f && bottom - it.first >= ideal * 0.45f }
-                .minByOrNull { Math.abs(it.first - target) - minOf(it.second, 80) * 2 }
-            // 가까운 여백이 없으면 범위를 넓혀서라도 여백에서 자름 (글자 줄이 잘리지 않게)
-            var cut = best?.first ?: cands
-                .filter { it.first - prev >= ideal * 0.3f && bottom - it.first >= ideal * 0.3f && it.first - prev <= w * 2.4f }
-                .minByOrNull { Math.abs(it.first - target) }?.first
+            val rem = bottom - prev
+            if (rem <= maxH) break
+            val ideal = rem / Math.ceil(rem / (w * 1.6)).toFloat()
+            val target = (prev + ideal).toInt()
+            var cut = cands
+                .filter { it.first - prev >= ideal * 0.45f && it.first - prev <= maxH && bottom - it.first >= ideal * 0.3f }
+                .minByOrNull { Math.abs(it.first - target) - minOf(it.second, 80) * 2 }?.first
             if (cut == null) {
-                // 여백이 없으면: 사진 안이면 사진 경계로 옮기고, 아니면 목표 지점에서 자름
+                // 쓸 수 있는 여백이 전혀 없을 때만: 사진 안이면 사진 경계로, 아니면 목표 지점에서 자름
                 val r = inAvoid(target)
-                cut = if (r != null && r.last - r.first < maxH) {
-                    listOf(r.first, r.last).filter { it - prev >= ideal * 0.3f && bottom - it >= ideal * 0.3f }
-                        .minByOrNull { Math.abs(it - target) }
-                } else target
+                cut = (if (r != null) listOf(r.first, r.last).filter { it - prev >= ideal * 0.3f && bottom - it >= ideal * 0.3f && it - prev <= maxH * 1.2f }
+                    .minByOrNull { Math.abs(it - target) } else null) ?: target
             }
-            if (cut != null && cut > prev) cuts += cut
+            cuts += cut
         }
         cuts += bottom
         return cuts

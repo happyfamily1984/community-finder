@@ -71,4 +71,11 @@ class ThreadsKitTest {
         val cuts = ThreadsKit.cutPoints(rows(400, listOf(110..120)), 100)
         assertEquals(115, cuts[1])
     }
+
+    @Test
+    fun tallImageIsCutAtItsOwnGaps() {
+        // 높이 600짜리 긴 사진 하나(글 캡처)가 본문 전체: 사진 안의 줄 사이 여백(195~205, 395~405)에서 자름
+        val cuts = ThreadsKit.cutPoints(rows(600, listOf(195..205, 395..405)), 100, avoid = listOf(0..600))
+        assertEquals(listOf(0, 200, 400, 600), cuts)
+    }
 }
