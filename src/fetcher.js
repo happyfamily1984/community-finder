@@ -8,7 +8,7 @@ export async function fetchHtml(url, { timeoutMs = 15000 } = {}) {
     headers: {
       'User-Agent': UA,
       'Accept-Language': 'ko-KR,ko;q=0.9',
-      Accept: 'text/html,application/xhtml+xml',
+      Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
     },
     signal: AbortSignal.timeout(timeoutMs),
     redirect: 'follow',

@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { SOURCES } from './sources.js';
+import { ACTIVE_SOURCES as SOURCES } from './sources.js';
 import { fetchHtml } from './fetcher.js';
 import { parseList } from './parser.js';
 import { scorePosts } from './score.js';
@@ -56,6 +56,7 @@ export class Crawler {
 
     results.forEach((items, si) => {
       const src = this.sources[si];
+      const current = new Set(items.map((it) => it.id));
       items.forEach((item, rank) => {
         const prev = this.posts.get(item.id);
         const p = { ...prev, ...item, rank: rank + 1, lastSeenAt: now, onBoard: true };
@@ -72,7 +73,7 @@ export class Crawler {
       // 이번 수집에서 베스트 목록에서 빠진 글 표시 (수집 성공한 소스만)
       if (this.status[src.id]?.ok) {
         for (const p of this.posts.values()) {
-          if (p.source === src.id && p.lastSeenAt !== now) p.onBoard = false;
+          if (p.source === src.id && !current.has(p.id)) p.onBoard = false;
         }
       }
     });

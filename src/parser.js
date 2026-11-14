@@ -34,7 +34,8 @@ export function parseList(html, source) {
     // 제목 요소 안의 댓글수 표시 등은 빼고 제목만 추출
     const titleClone = titleEl.clone();
     if (sel.comments) titleClone.find(sel.comments.split(' ').pop()).remove();
-    const title = cleanTitle(titleClone.text());
+    let title = cleanTitle(titleClone.text());
+    if (source.titleStrip) title = title.replace(new RegExp(source.titleStrip), '').trim();
     if (!title) return;
 
     const linkEl = sel.link ? row.find(sel.link).first() : titleEl.is('a') ? titleEl : titleEl.closest('a');
@@ -43,7 +44,12 @@ export function parseList(html, source) {
 
     let url;
     try {
-      url = new URL(href, source.url).toString();
+      const u = new URL(href, source.url);
+      const keep = new URLSearchParams();
+      for (const k of source.keepParams ?? []) if (u.searchParams.has(k)) keep.set(k, u.searchParams.get(k));
+      u.search = keep.toString();
+      u.hash = '';
+      url = u.toString();
     } catch {
       return;
     }

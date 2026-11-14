@@ -34,6 +34,13 @@ test('클리앙: 별도 link 선택자, 차단글 제외', () => {
   const posts = parseList(fixture('clien'), sourceById.clien);
   assert.equal(posts.length, 1);
   assert.equal(posts[0].title, '맥북 샀어요');
-  assert.equal(posts[0].url, 'https://www.clien.net/service/board/park/1001?od=T33');
+  assert.equal(posts[0].url, 'https://www.clien.net/service/board/park/1001');
   assert.deepEqual([posts[0].views, posts[0].comments, posts[0].likes], [3400, 42, 17]);
+});
+
+test('루리웹: 제목 앞 순위 숫자 제거', () => {
+  const html = '<table><tr class="table_body blocktarget"><td><a class="subject_link" href="/best/board/300143/read/1?m=humor&t=1">1 서울우유 결과</a></td><td class="hit">100</td></tr></table>';
+  const [p] = parseList(html, sourceById.ruliweb);
+  assert.equal(p.title, '서울우유 결과');
+  assert.equal(p.url, 'https://bbs.ruliweb.com/best/board/300143/read/1');
 });

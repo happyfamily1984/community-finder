@@ -4,7 +4,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { Crawler } from './crawler.js';
-import { SOURCES } from './sources.js';
+import { ACTIVE_SOURCES as SOURCES } from './sources.js';
 import { demoFetchItems } from './demo.js';
 
 const outDir = path.resolve(process.env.OUT_DIR || 'out');

@@ -5,6 +5,9 @@
 //   link     : href를 가진 a 태그 (없으면 title에서 찾음)
 //   views / comments / likes : 숫자가 들어있는 요소 (없으면 생략)
 //   exclude  : 공지·광고 등 제외할 row 선택자
+//   keepParams : 글 주소에서 남길 쿼리 파라미터 (나머지는 제거 → 같은 글이 순위가 바뀌어도 같은 id)
+//   titleStrip : 제목에서 지울 패턴 (정규식)
+//   disabled : true면 수집 안 함
 export const SOURCES = [
   {
     id: 'dcinside',
@@ -12,6 +15,7 @@ export const SOURCES = [
     board: '실시간 베스트',
     url: 'https://gall.dcinside.com/board/lists/?id=dcbest',
     color: '#3b4890',
+    keepParams: ['id', 'no'],
     selectors: {
       row: 'tr.ub-content.us-post',
       exclude: '[data-type="icon_notice"]',
@@ -27,6 +31,8 @@ export const SOURCES = [
     board: '포텐 터짐',
     url: 'https://www.fmkorea.com/best',
     color: '#4a7bd0',
+    // 클라우드(해외 서버) 자동 접근을 차단함 (HTTP 430). 차단을 우회하지 않고 꺼둠
+    disabled: true,
     selectors: {
       row: '.fm_best_widget li.li',
       title: 'h3.title a',
@@ -54,6 +60,7 @@ export const SOURCES = [
     board: '유머 베스트',
     url: 'https://bbs.ruliweb.com/best/humor_only',
     color: '#2b6fb6',
+    titleStrip: '^\\d{1,2}\\s+',
     selectors: {
       row: 'tr.table_body.blocktarget',
       exclude: '.notice',
@@ -99,6 +106,7 @@ export const SOURCES = [
     board: '베스트',
     url: 'https://www.bobaedream.co.kr/list?code=best',
     color: '#0072bc',
+    keepParams: ['code', 'No'],
     selectors: {
       row: 'table#boardlist tbody tr[itemtype]',
       title: 'a.bsubject',
@@ -109,4 +117,5 @@ export const SOURCES = [
   },
 ];
 
+export const ACTIVE_SOURCES = SOURCES.filter((s) => !s.disabled);
 export const sourceById = Object.fromEntries(SOURCES.map((s) => [s.id, s]));
