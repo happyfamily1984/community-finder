@@ -28,6 +28,8 @@ data class Post(
     val score: Int,
     val viewsPerMin: Int,
     val firstSeenAt: Long,
+    /** 사진이 본문인 글의 원본 사진 주소 (해외 밈 등) */
+    val image: String? = null,
 )
 
 data class Feed(val updatedAt: Long, val sources: List<Source>, val posts: List<Post>) {
@@ -64,6 +66,7 @@ data class Feed(val updatedAt: Long, val sources: List<Source>, val posts: List<
                         score = p.optInt("score", 0),
                         viewsPerMin = p.optInt("viewsPerMin", 0),
                         firstSeenAt = p.optLong("firstSeenAt", 0),
+                        image = p.optString("image").takeIf { it.startsWith("https://") },
                     )
                 }
             }

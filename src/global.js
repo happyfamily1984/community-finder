@@ -7,6 +7,12 @@ async function getJson(url) {
   return res.json();
 }
 
+export function isImageUrl(url, contentType) {
+  if (!url || !/^https:\/\//.test(url)) return false;
+  if (contentType) return /^image\/(jpeg|png|webp|gif)/.test(contentType);
+  return /\.(jpe?g|png|webp|gif)(\?.*)?$/i.test(url);
+}
+
 // Reddit: 오늘의 인기글 (성인/고정글 제외)
 export async function fetchReddit(source) {
   const json = await getJson(`https://www.reddit.com/r/${source.sub}/top.json?t=day&limit=30&raw_json=1`);
@@ -21,6 +27,7 @@ export async function fetchReddit(source) {
       views: null,
       comments: d.num_comments ?? null,
       likes: d.score ?? null,
+      image: d.post_hint === 'image' && isImageUrl(d.url, null) ? d.url : null,
     }));
 }
 
@@ -37,5 +44,7 @@ export async function fetchLemmy(source) {
       views: null,
       comments: p.counts?.comments ?? null,
       likes: p.counts?.score ?? null,
+      // 사진이 본문인 글이면 원본 사진 주소 (앱이 사이트 화면 대신 사진만 깔끔하게 보여줌)
+      image: isImageUrl(p.post.url, p.post.url_content_type) ? p.post.url : null,
     }));
 }

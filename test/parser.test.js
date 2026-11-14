@@ -44,3 +44,11 @@ test('루리웹: 제목 앞 순위 숫자 제거', () => {
   assert.equal(p.title, '서울우유 결과');
   assert.equal(p.url, 'https://bbs.ruliweb.com/best/board/300143/read/1');
 });
+
+test('해외: 사진 주소 판별', async () => {
+  const { isImageUrl } = await import('../src/global.js');
+  assert.equal(isImageUrl('https://i.redd.it/abc.jpg', null), true);
+  assert.equal(isImageUrl('https://media.piefed.world/x/y', 'image/webp'), true);
+  assert.equal(isImageUrl('https://example.com/article', 'text/html'), false);
+  assert.equal(isImageUrl('http://insecure.com/a.png', null), false);
+});

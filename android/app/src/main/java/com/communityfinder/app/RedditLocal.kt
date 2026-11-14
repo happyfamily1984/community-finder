@@ -37,6 +37,7 @@ object RedditLocal {
                 url = "https://www.reddit.com" + d.getString("permalink"), views = null,
                 comments = d.optInt("num_comments"), likes = d.optInt("score"), score = scores[i], viewsPerMin = 0,
                 firstSeenAt = (d.optDouble("created_utc", now / 1000.0) * 1000).toLong(),
+                image = d.optString("url").takeIf { d.optString("post_hint") == "image" && it.startsWith("https://") },
             )
         }
     }

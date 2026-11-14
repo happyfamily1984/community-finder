@@ -35,3 +35,12 @@ class ImageTextFilterTest {
         assertFalse(ImageTranslator.worthTranslating("ㅋㅋ ok"))
     }
 }
+
+class ImagePostTest {
+    @Test
+    fun buildsCleanPageAndEscapes() {
+        val html = imagePostHtml("A <b> & \"q\"", "https://i.redd.it/a.jpg?x=1&y=2")
+        assertTrue(html.contains("A &lt;b&gt; &amp; &quot;q&quot;"))
+        assertTrue(html.contains("src=\"https://i.redd.it/a.jpg?x=1&amp;y=2\""))
+    }
+}

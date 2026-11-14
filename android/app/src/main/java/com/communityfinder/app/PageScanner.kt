@@ -46,6 +46,15 @@ sealed interface ScanState {
 private const val MAX_SCAN_HEIGHT_PX = 12000 // 메모리 보호: 너무 긴 글은 앞부분만
 
 /** 페이지 분석: 작성자 닉네임 위치, 본문 영역, 본문 텍스트 (CSS px, 문서 기준) */
+fun imagePostHtml(title: String, image: String): String {
+    fun esc(t: String) = t.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;")
+    return """<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1">
+<style>body{margin:0;background:#fff;color:#111;font-family:sans-serif}
+.post_title{font-size:20px;font-weight:800;line-height:1.35;padding:16px 14px 12px;margin:0;word-break:keep-all}
+img{display:block;width:100%;height:auto}</style></head>
+<body><article class="post_content"><h1 class="post_title">${esc(title)}</h1><img src="${esc(image)}"></article></body></html>"""
+}
+
 /** 페이지의 글자 노드를 모아 window.__cfNodes에 보관하고 문자열 배열을 반환 (shadow DOM 포함) */
 private const val COLLECT_TEXT_JS = """
 (function(){
@@ -210,7 +219,13 @@ fun PageScanner(post: Post, attempt: Int, onState: (ScanState) -> Unit) {
                                 if (!busy) onState(ScanState.Loading(p * 85 / 100, "페이지 여는 중"))
                             }
                         }
-                        loadUrl(mobileUrl(post))
+                        val img = post.image
+                        if (img != null) {
+                            // 사진이 본문인 글: 사이트 화면 대신 제목 + 원본 사진만 담은 깔끔한 화면을 만들어 캡처
+                            loadDataWithBaseURL(post.url, imagePostHtml(post.title, img), "text/html", "utf-8", null)
+                        } else {
+                            loadUrl(mobileUrl(post))
+                        }
                         webView = this
                     }
                 },

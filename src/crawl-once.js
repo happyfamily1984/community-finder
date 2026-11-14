@@ -18,8 +18,8 @@ const feed = {
   updatedAt: crawler.lastCrawlAt,
   sources: SOURCES.map(({ id, name, board, url, color }) => ({ id, name, board, url, color, status: crawler.status[id] })),
   posts: crawler.list({ sort: 'score', limit: 500 }).map(
-    ({ id, source, title, url, views, comments, likes, score, viewsPerMin, firstSeenAt, rank }) => ({
-      id, source, title, url, views, comments, likes, score, viewsPerMin, firstSeenAt, rank,
+    ({ id, source, title, url, views, comments, likes, score, viewsPerMin, firstSeenAt, rank, image }) => ({
+      id, source, title, url, views, comments, likes, score, viewsPerMin, firstSeenAt, rank, ...(image ? { image } : {}),
     }),
   ),
 };
