@@ -22,7 +22,7 @@ object RedditLocal {
         Triple("reddit-unexpected", "Unexpected", 0xFFD93A00),
     )
 
-    private fun file(ctx: Context) = File(ctx.filesDir, "reddit.json")
+    private fun file(ctx: Context) = File(ctx.filesDir, "reddit2.json")
 
     fun source(id: String, sub: String, color: Long, ok: Boolean, error: String?) = Source(id, "Reddit r/$sub", "오늘의 인기", color, ok, error)
 
@@ -42,6 +42,23 @@ object RedditLocal {
         }
     }
 
+    /** 공식 RSS(Atom) 피드 파싱. 점수가 없어서 순서(인기순)로 화제도를 매김 */
+    fun parseRss(xml: String, sourceId: String, now: Long): List<Post> {
+        val doc = org.jsoup.Jsoup.parse(xml, "", org.jsoup.parser.Parser.xmlParser())
+        val entries = doc.select("entry").filter { !it.select("content").text().contains("nsfw", ignoreCase = true) }
+        return entries.mapIndexedNotNull { i, e ->
+            val title = e.selectFirst("title")?.text()?.trim().orEmpty()
+            val link = e.selectFirst("link")?.attr("href").orEmpty()
+            val pid = Regex("/comments/([a-z0-9]+)").find(link)?.groupValues?.get(1)
+            if (title.isEmpty() || pid == null) return@mapIndexedNotNull null
+            val image = Regex("https://i\\.redd\\.it/[\\w.-]+\\.(?:jpe?g|png|webp|gif)").find(e.selectFirst("content")?.text().orEmpty())?.value
+            Post(
+                id = "$sourceId:$pid", source = sourceId, title = title, url = link, views = null, comments = null, likes = null,
+                score = Math.round(85f * (1f - i.toFloat() / maxOf(entries.size - 1, 1))), viewsPerMin = 0, firstSeenAt = now, image = image,
+            )
+        }
+    }
+
     /** network=false면 저장해 둔 결과만 */
     fun load(ctx: Context, network: Boolean, now: Long = System.currentTimeMillis()): List<Pair<Source, List<Post>>> {
         val state = runCatching { JSONObject(file(ctx).readText()) }.getOrDefault(JSONObject())
@@ -56,26 +73,38 @@ object RedditLocal {
             if (now < cooldownUntil) return@map cached("Reddit이 접근을 제한함 · ${(cooldownUntil - now) / 60000 + 1}분 뒤 다시 시도")
             if (now - entry.optLong("fetchedAt", 0) < MIN_INTERVAL_MS && entry.has("posts")) return@map cached(null)
 
-            val conn = URL("https://www.reddit.com/r/$sub/top.json?t=day&limit=30&raw_json=1").openConnection() as HttpURLConnection
-            conn.connectTimeout = 10000; conn.readTimeout = 15000
-            conn.setRequestProperty("User-Agent", UA)
-            conn.setRequestProperty("Accept", "application/json")
-            try {
-                val code = conn.responseCode
-                if (code == 429 || code == 403) {
-                    cooldownUntil = now + COOLDOWN_MS
-                    state.put("cooldownUntil", cooldownUntil)
-                    return@map cached("Reddit이 접근을 제한함 (HTTP $code) · 1시간 뒤 다시 시도")
+            fun get(url: String, accept: String): Pair<Int, String> {
+                val conn = URL(url).openConnection() as HttpURLConnection
+                conn.connectTimeout = 10000; conn.readTimeout = 15000
+                conn.setRequestProperty("User-Agent", UA)
+                conn.setRequestProperty("Accept", accept)
+                return try {
+                    val code = conn.responseCode
+                    code to (if (code == 200) conn.inputStream.bufferedReader().use { it.readText() } else "")
+                } finally {
+                    conn.disconnect()
                 }
-                if (code != 200) return@map cached("HTTP $code")
-                val posts = parse(conn.inputStream.bufferedReader().use { it.readText() }, id, now)
-                if (posts.isEmpty()) return@map cached("글을 찾지 못했어요")
+            }
+            try {
+                // 1) 공개 JSON  2) 막히면 공식 RSS 피드 (추천·댓글 수는 없어서 순위로 화제도 계산)
+                val (jc, jt) = get("https://www.reddit.com/r/$sub/top.json?t=day&limit=30&raw_json=1", "application/json")
+                var posts = if (jc == 200) runCatching { parse(jt, id, now) }.getOrDefault(emptyList()) else emptyList()
+                var note = "JSON $jc"
+                if (posts.isEmpty()) {
+                    val (rc, rt) = get("https://www.reddit.com/r/$sub/top/.rss?t=day&limit=30", "application/atom+xml")
+                    note += ", RSS $rc"
+                    if (rc == 200) posts = runCatching { parseRss(rt, id, now) }.getOrDefault(emptyList())
+                    if (posts.isEmpty() && (rc == 429 || rc == 403)) {
+                        cooldownUntil = now + COOLDOWN_MS
+                        state.put("cooldownUntil", cooldownUntil)
+                        return@map cached("Reddit이 접근을 막음 ($note) · 1시간 뒤 다시 시도")
+                    }
+                }
+                if (posts.isEmpty()) return@map cached("글을 받지 못함 ($note)")
                 state.put(id, JSONObject().put("fetchedAt", now).put("posts", JSONArray().also { a -> posts.forEach { a.put(PostStore.toJson(it)) } }))
                 source(id, sub, color, true, null) to posts
             } catch (e: Exception) {
                 cached(e.message ?: "연결 실패")
-            } finally {
-                conn.disconnect()
             }
         }
         if (network) runCatching { file(ctx).writeText(state.toString()) }

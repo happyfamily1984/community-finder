@@ -64,3 +64,18 @@ class GroqTest {
         assertEquals("llama-3.3-70b-versatile", Groq.pickModel(json))
     }
 }
+
+class RedditRssTest {
+    @Test
+    fun parsesAtomFeed() {
+        val xml = """<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom">
+          <entry><title>Funny cat</title><link href="https://www.reddit.com/r/funny/comments/abc12/funny_cat/"/>
+            <content type="html">&lt;a href="https://i.redd.it/xyz9.jpg"&gt;[link]&lt;/a&gt;</content></entry>
+          <entry><title>Dog</title><link href="https://www.reddit.com/r/funny/comments/def34/dog/"/><content type="html">text</content></entry></feed>"""
+        val posts = RedditLocal.parseRss(xml, "reddit-funny", 5)
+        assertEquals(listOf("reddit-funny:abc12", "reddit-funny:def34"), posts.map { it.id })
+        assertEquals("https://i.redd.it/xyz9.jpg", posts[0].image)
+        assertEquals(null, posts[1].image)
+        assertTrue(posts[0].score > posts[1].score)
+    }
+}

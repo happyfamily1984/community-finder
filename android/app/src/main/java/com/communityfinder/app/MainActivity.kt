@@ -419,7 +419,8 @@ fun SearchPill(value: String, onChange: (String) -> Unit, modifier: Modifier = M
 
 @Composable
 fun StatusLine(feed: Feed?, error: String?) {
-    val failed = feed?.sources?.filter { !it.ok }?.map { it.name }.orEmpty()
+    // 실패한 곳은 이유도 같이 표시 (원인 파악용)
+    val failed = feed?.sources?.filter { !it.ok }?.map { s -> s.name + (s.error?.let { " ($it)" } ?: "") }.orEmpty()
     val parts = buildList {
         if (feed != null) add("클라우드 수집 ${ago(feed.updatedAt)}")
         if (failed.isNotEmpty()) add("수집 실패: ${failed.joinToString()}")
@@ -430,7 +431,7 @@ fun StatusLine(feed: Feed?, error: String?) {
     Row(Modifier.padding(horizontal = 18.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         Icon(Icons.Outlined.History, null, tint = color, modifier = Modifier.size(15.dp))
         Spacer(Modifier.width(5.dp))
-        Text(parts.joinToString(" · "), fontSize = 12.sp, color = color, maxLines = 2)
+        Text(parts.joinToString(" · "), fontSize = 12.sp, color = color, maxLines = 4)
     }
 }
 
