@@ -27,7 +27,8 @@ object ThreadsKit {
         val canvas = Canvas(out)
         val paint = Paint().apply { isFilterBitmap = false }
         rects.forEach { r0 ->
-            val r = Rect(r0).apply { inset(-4, -4) }
+            // 닉네임 왼쪽에 붙은 작은 프로필 사진까지 가리도록 왼쪽으로 조금 넓힘
+            val r = Rect(r0.left - minOf(r0.height(), 60), r0.top - 4, r0.right + 6, r0.bottom + 4)
             if (!r.intersect(0, 0, out.width, out.height) || r.width() < 2 || r.height() < 2) return@forEach
             val part = Bitmap.createBitmap(out, r.left, r.top, r.width(), r.height())
             val small = Bitmap.createScaledBitmap(part, maxOf(1, r.width() / block), maxOf(1, r.height() / block), true)

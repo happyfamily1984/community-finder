@@ -44,12 +44,28 @@ sealed interface ScanState {
 private const val MAX_SCAN_HEIGHT_PX = 12000 // 메모리 보호: 너무 긴 글은 앞부분만
 
 /** 페이지 분석: 작성자 닉네임 위치, 본문 영역, 본문 텍스트 (CSS px, 문서 기준) */
-private fun analyzeJs(title: String) = """
+/** 사이트별 작성자(글쓴이·댓글 작성자) 닉네임/프로필 위치. GitHub 공개 코드로 확인한 선택자 + 추정 */
+val AUTHOR_SELECTORS = mapOf(
+    "fmkorea" to ".member_plate, a[class*='member_'], .side.fr .profile, img.xe_point_level_icon, .fdb_itm .meta > a",
+    "dcinside" to "ul.ginfo2 > li:first-child, .gallview-tit-box .nick, .gall-writer, .comment-box .nick, .all-comment-lst .nick, a.nick, .ginfo-area .nick, .sp-nick, .nick-icon",
+    "clien" to ".post_contact .contact_name, .contact_name, .nickname, .post_info .nickname, .comment_info .nickname, .nickimg",
+    "ruliweb" to ".user_view .nick, .user_info .nick, .nick, a.nick, .user_inner .nick, .comment .nick, .profile_image, .member_srl",
+    "natepann" to ".writer, .info .writer, .nameui, .usertxt .nameui, .cmt_best .writer, .list_comment .writer, .nick, .sub .writer, .profile",
+    "bobaedream" to ".author, .data4, .util .name, .info .nickName, .nickName, .reple_id, .rename, .writer, .replylist .name, .util2 .info span:first-child, a[onclick*='submenu']",
+    "theqoo" to ".author, .nick_name, .side .author",
+)
+
+private fun analyzeJs(title: String, siteSel: String) = """
 (function(){
   var d=document.documentElement, vw=d.clientWidth||window.innerWidth, sx=window.scrollX, sy=window.scrollY;
   function R(e){var r=e.getBoundingClientRect();return [r.left+sx,r.top+sy,r.width,r.height];}
   var sel='[class*="nick"],[class*="Nick"],[class*="writer"],[class*="Writer"],[class*="author"],[class*="Author"],[class*="user_name"],[class*="userName"],[class*="username"],[class*="user-name"],[class*="profile_name"],[class*="member_name"],.name,.nic,.user,.id';
   var authors=[];
+  var site=${JSONObject.quote(siteSel)};
+  if(site){try{document.querySelectorAll(site).forEach(function(e){var r=e.getBoundingClientRect();
+    if(r.width>0&&r.height>0&&r.height<90&&r.width<vw*0.8)authors.push(R(e));});}catch(x){}}
+  document.querySelectorAll('[class*="profile"] img,[class*="avatar"],img[class*="profile"],img[class*="level"],img[class*="icon_nick"]').forEach(function(e){
+    var r=e.getBoundingClientRect();if(r.width>0&&r.width<90&&r.height>0&&r.height<90)authors.push(R(e));});
   document.querySelectorAll(sel).forEach(function(e){var r=e.getBoundingClientRect(),t=(e.innerText||'').trim();
     if(r.width>0&&r.height>0&&r.height<70&&r.width<vw*0.7&&t.length>0&&t.length<40)authors.push(R(e));});
   var imgs=[];
@@ -65,7 +81,7 @@ private fun analyzeJs(title: String) = """
   if(key.length>2){var ts=document.querySelectorAll('h1,h2,h3,h4,[class*="title"],[class*="subject"],[class*="tit"]');
     for(var i=0;i<ts.length;i++){if((ts[i].innerText||'').indexOf(key)>=0){var tr=ts[i].getBoundingClientRect();if(tr.height>0&&tr.height<300){titleR=R(ts[i]);break;}}}}
   return JSON.stringify({w:Math.max(d.scrollWidth,document.body.scrollWidth),h:Math.max(d.scrollHeight,document.body.scrollHeight),
-    authors:authors.slice(0,80),imgs:imgs.slice(0,200),content:best?R(best.e):null,title:titleR,text:best?(best.e.innerText||'').slice(0,2000):''});
+    authors:authors.slice(0,300),imgs:imgs.slice(0,200),content:best?R(best.e):null,title:titleR,text:best?(best.e.innerText||'').slice(0,2000):''});
 })()
 """
 
@@ -95,14 +111,14 @@ fun PageScanner(post: Post, attempt: Int, onState: (ScanState) -> Unit) {
         onState(ScanState.Loading(90, "글 전체 펼치는 중"))
         delay(600)
         fun parse(raw: String?) = runCatching { JSONObject(JSONArray("[$raw]").getString(0)) }.getOrNull()
-        val first = parse(eval(wv, analyzeJs(post.title)))
+        val first = parse(eval(wv, analyzeJs(post.title, AUTHOR_SELECTORS[post.source].orEmpty())))
         val cssW = first?.optDouble("w")?.takeIf { it > 0 } ?: (widthPx / density.density).toDouble()
         val fullPx = ((first?.optDouble("h") ?: 0.0) * widthPx / cssW).toInt().coerceAtLeast(screenHeightPx)
         webHeightPx = fullPx.coerceAtMost(MAX_SCAN_HEIGHT_PX)
         onState(ScanState.Loading(95, "이미지 불러오는 중"))
         delay(1800)
         // 늘어난 화면 기준으로 위치 다시 측정
-        val info = parse(eval(wv, analyzeJs(post.title))) ?: first
+        val info = parse(eval(wv, analyzeJs(post.title, AUTHOR_SELECTORS[post.source].orEmpty()))) ?: first
         onState(ScanState.Loading(99, "캡처 중"))
         try {
             val bmp = Bitmap.createBitmap(wv.width.coerceAtLeast(1), wv.height.coerceAtLeast(1), Bitmap.Config.ARGB_8888)
