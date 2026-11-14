@@ -59,6 +59,8 @@ fun SettingsScreen(feed: Feed?, onBack: (() -> Unit)? = null, onSetup: (() -> Un
     var redditLocal by remember { mutableStateOf(prefs.redditLocal) }
     var geminiKey by remember { mutableStateOf(prefs.geminiKey) }
     var geminiStatus by remember { mutableStateOf<String?>(null) }
+    var groqKey by remember { mutableStateOf(prefs.groqKey) }
+    var groqStatus by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     var message by remember { mutableStateOf<String?>(null) }
 
@@ -203,7 +205,7 @@ fun SettingsScreen(feed: Feed?, onBack: (() -> Unit)? = null, onSetup: (() -> Un
                     AccentTitle("해외 글 번역 (Gemini 무료 키)")
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        "키를 넣으면 밈·속어까지 자연스럽게 번역해요. 무료 한도를 다 쓰면 자동으로 휴대폰 내장 번역으로 바뀌고, 1시간 뒤 다시 Gemini를 써요. 키가 없으면 내장 번역만 써요.",
+                        "키를 넣으면 밈·속어까지 자연스럽게 번역해요. 무료 한도를 다 쓰면 자동으로 예비 번역(Groq → 휴대폰 내장)으로 바뀌고, 1시간 뒤 다시 Gemini를 써요.",
                         fontSize = 13.sp, lineHeight = 19.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Spacer(Modifier.height(10.dp))
@@ -224,8 +226,34 @@ fun SettingsScreen(feed: Feed?, onBack: (() -> Unit)? = null, onSetup: (() -> Un
                     geminiStatus?.let { Spacer(Modifier.height(8.dp)); Text(it, fontSize = 13.sp, lineHeight = 18.sp) }
                     if (Gemini.inCooldown(prefs)) {
                         Spacer(Modifier.height(6.dp))
-                        Text("지금은 무료 한도를 다 써서 휴대폰 내장 번역을 쓰고 있어요.", fontSize = 12.sp, color = MaterialTheme.colorScheme.error)
+                        Text("지금은 Gemini 무료 한도를 다 써서 예비 번역을 쓰고 있어요.", fontSize = 12.sp, color = MaterialTheme.colorScheme.error)
                     }
+                }
+
+                // 번역 엔진 2순위
+                SettingsCard {
+                    AccentTitle("예비 번역 (Groq 무료 키)")
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "Gemini 한도가 떨어지면 Groq(무료 AI 번역)으로 넘어가요. 둘 다 안 되면 휴대폰 내장 번역을 써요. 순서: Gemini → Groq → 내장 번역",
+                        fontSize = 13.sp, lineHeight = 19.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    OutlinedPillField(groqKey, { groqKey = it; prefs.groqKey = it; groqStatus = null }, "API 키 붙여넣기 (gsk_…)", 50.dp, 13.sp)
+                    Spacer(Modifier.height(10.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(shape = CircleShape, onClick = {
+                            ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://console.groq.com/keys")))
+                        }) { Text("키 발급 페이지", fontWeight = FontWeight.Bold) }
+                        Button(shape = CircleShape, enabled = groqKey.isNotBlank(), onClick = {
+                            groqStatus = "확인 중…"
+                            scope.launch {
+                                val r = Groq.translate(ctx, listOf("This meme is so relatable lol"))
+                                groqStatus = if (r != null) "✅ 연결됨 (${prefs.groqModel}) → ${r[0]}" else "⚠ ${Groq.lastError ?: "실패"}"
+                            }
+                        }) { Text("번역 테스트", fontWeight = FontWeight.Bold) }
+                    }
+                    groqStatus?.let { Spacer(Modifier.height(8.dp)); Text(it, fontSize = 13.sp, lineHeight = 18.sp) }
                 }
 
                 // Reddit

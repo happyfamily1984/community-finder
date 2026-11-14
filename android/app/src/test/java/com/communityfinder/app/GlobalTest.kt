@@ -56,3 +56,11 @@ class GeminiTest {
         assertEquals("gemini-2.5-flash", Gemini.pickModel(json))
     }
 }
+
+class GroqTest {
+    @Test
+    fun picksLargeVersatileModel() {
+        val json = """{"data":[{"id":"whisper-large-v3"},{"id":"llama-3.1-8b-instant"},{"id":"llama-3.3-70b-versatile"},{"id":"meta-llama/llama-guard-4-12b"},{"id":"gemma2-9b-it"}]}"""
+        assertEquals("llama-3.3-70b-versatile", Groq.pickModel(json))
+    }
+}

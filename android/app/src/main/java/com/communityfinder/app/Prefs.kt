@@ -52,6 +52,19 @@ class Prefs(ctx: Context) {
         get() = sp.getLong("geminiCooldown", 0)
         set(v) = sp.edit().putLong("geminiCooldown", v).apply()
 
+    /** Groq 번역용 API 키 (무료 발급). Gemini 다음 순서로 사용 */
+    var groqKey: String
+        get() = sp.getString("groqKey", "") ?: ""
+        set(v) { sp.edit().putString("groqKey", v.trim()).putString("groqModel", "").putLong("groqCooldown", 0).apply() }
+
+    var groqModel: String
+        get() = sp.getString("groqModel", "") ?: ""
+        set(v) = sp.edit().putString("groqModel", v).apply()
+
+    var groqCooldownUntil: Long
+        get() = sp.getLong("groqCooldown", 0)
+        set(v) = sp.edit().putLong("groqCooldown", v).apply()
+
     var onboardingDone: Boolean
         get() = sp.getBoolean("onboardingDone", false)
         set(v) = sp.edit().putBoolean("onboardingDone", v).apply()
