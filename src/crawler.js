@@ -10,7 +10,7 @@ const KEEP_MS = 24 * 60 * 60 * 1000; // 24시간 지난 글은 정리
 export class Crawler {
   constructor({ dataDir, fetchItems, sources = SOURCES, onNewPosts = () => {} } = {}) {
     // fetchItems(source) -> 글 배열. 기본값은 실제 사이트를 가져와 파싱
-    this.fetchItems = fetchItems ?? (async (source) => parseList(await fetchHtml(source.url), source));
+    this.fetchItems = fetchItems ?? (async (source) => (source.fetch ? source.fetch(source) : parseList(await fetchHtml(source.url), source)));
     this.sources = sources;
     this.onNewPosts = onNewPosts;
     this.posts = new Map();

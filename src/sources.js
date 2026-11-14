@@ -8,6 +8,8 @@
 //   keepParams : 글 주소에서 남길 쿼리 파라미터 (나머지는 제거 → 같은 글이 순위가 바뀌어도 같은 id)
 //   titleStrip : 제목에서 지울 패턴 (정규식)
 //   disabled : true면 수집 안 함
+import { fetchReddit, fetchLemmy } from './global.js';
+
 export const SOURCES = [
   {
     id: 'dcinside',
@@ -115,6 +117,13 @@ export const SOURCES = [
       comments: '.totreply',
     },
   },
+  // ---- 해외 유머 (id가 reddit-/lemmy- 로 시작하면 앱에서 '해외' 탭 + 번역 대상) ----
+  { id: 'reddit-funny', name: 'Reddit r/funny', board: '오늘의 인기', url: 'https://www.reddit.com/r/funny/', color: '#ff4500', sub: 'funny', fetch: fetchReddit },
+  { id: 'reddit-memes', name: 'Reddit r/memes', board: '오늘의 인기', url: 'https://www.reddit.com/r/memes/', color: '#ff6a33', sub: 'memes', fetch: fetchReddit },
+  { id: 'reddit-unexpected', name: 'Reddit r/Unexpected', board: '오늘의 인기', url: 'https://www.reddit.com/r/Unexpected/', color: '#d93a00', sub: 'Unexpected', fetch: fetchReddit },
+  { id: 'lemmy-memes', name: 'Lemmy memes', board: '오늘의 인기', url: 'https://lemmy.world/c/memes', color: '#00a846', host: 'lemmy.world', community: 'memes', fetch: fetchLemmy },
+  { id: 'lemmy-shitpost', name: 'Lemmy shitpost', board: '오늘의 인기', url: 'https://lemmy.world/c/lemmyshitpost', color: '#1b8f5a', host: 'lemmy.world', community: 'lemmyshitpost', fetch: fetchLemmy },
+  { id: 'lemmy-funny', name: 'Lemmy funny', board: '오늘의 인기', url: 'https://lemmy.world/c/funny', color: '#3aa76d', host: 'lemmy.world', community: 'funny', fetch: fetchLemmy },
 ];
 
 export const ACTIVE_SOURCES = SOURCES.filter((s) => !s.disabled);
