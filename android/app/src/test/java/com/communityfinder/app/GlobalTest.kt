@@ -25,3 +25,13 @@ class GlobalTest {
         assertEquals(1700000000000L, posts[0].firstSeenAt)
     }
 }
+
+class ImageTextFilterTest {
+    @Test
+    fun filtersOcrNoise() {
+        assertTrue(ImageTranslator.worthTranslating("When you finally fix the bug"))
+        assertTrue(ImageTranslator.worthTranslating("Monday"))
+        assertFalse(ImageTranslator.worthTranslating("o] 7"))
+        assertFalse(ImageTranslator.worthTranslating("ㅋㅋ ok"))
+    }
+}

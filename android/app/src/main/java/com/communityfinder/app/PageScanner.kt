@@ -18,7 +18,9 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
@@ -89,7 +91,8 @@ private fun analyzeJs(title: String, siteSel: String) = """
   document.querySelectorAll(sel).forEach(function(e){var r=e.getBoundingClientRect(),t=(e.innerText||'').trim();
     if(r.width>0&&r.height>0&&r.height<70&&r.width<vw*0.7&&t.length>0&&t.length<40)authors.push(R(e));});
   var imgs=[];
-  document.querySelectorAll('img,video,iframe,canvas').forEach(function(e){var r=e.getBoundingClientRect();if(r.width>vw*0.3&&r.height>60)imgs.push(R(e));});
+  (function deep(root){root.querySelectorAll('img,video,canvas').forEach(function(e){var r=e.getBoundingClientRect();if(r.width>vw*0.3&&r.height>60)imgs.push(R(e));});
+    root.querySelectorAll('*').forEach(function(e){if(e.shadowRoot)deep(e.shadowRoot);});})(document);
   var cands=[];
   document.querySelectorAll('article,[class*="content"],[class*="Content"],[class*="view"],[class*="View"],[class*="article"],[class*="post"],[class*="read"],[class*="body"],[class*="txt"],[id*="content"],[id*="view"]').forEach(function(e){
     var r=e.getBoundingClientRect(); if(r.width<vw*0.6||r.height<80)return;
@@ -169,6 +172,15 @@ fun PageScanner(post: Post, attempt: Int, onState: (ScanState) -> Unit) {
             var content = rect(info?.optJSONArray("content"))
             val title = rect(info?.optJSONArray("title"))
             if (content != null && title != null && title.top < content.top) content = Rect(content.left, title.top, content.right, content.bottom)
+            if (isGlobal(post.source) && Translator.prepare()) {
+                // 사진 속 영어 글자도 번역해서 덮어씀 (글자 인식 → 번역 → 다시 그리기)
+                onState(ScanState.Loading(99, "사진 속 글자 번역 중"))
+                runCatching {
+                    withContext(Dispatchers.Default) {
+                        ImageTranslator.translateInPlace(bmp, images) { i, n -> onState(ScanState.Loading(99, "사진 속 글자 번역 중 ($i/$n)")) }
+                    }
+                }
+            }
             onState(ScanState.Done(ScanResult(bmp, fullPx > MAX_SCAN_HEIGHT_PX, authors, content, images, info?.optString("text").orEmpty())))
         } catch (e: OutOfMemoryError) {
             onState(ScanState.Failed("글이 너무 길어서 캡처하지 못했어요"))
