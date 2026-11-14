@@ -52,4 +52,20 @@ class ThreadsKitTest {
         val sizes = cuts.zipWithNext { a, b -> b - a }
         assertTrue(sizes.all { it >= 90 })
     }
+
+    @Test
+    fun blankRowIgnoresThinSideBorders() {
+        val white = 0xFFFFFFFF.toInt(); val gray = 0xFF888888.toInt(); val black = 0xFF000000.toInt()
+        val bordered = IntArray(1080) { white }.also { it[0] = gray; it[1] = gray; it[1078] = gray; it[1079] = gray }
+        assertTrue(ThreadsKit.isBlankRow(bordered))
+        val text = IntArray(1080) { if (it in 100..400 && it % 3 == 0) black else white }
+        assertTrue(!ThreadsKit.isBlankRow(text))
+    }
+
+    @Test
+    fun fallsBackToFarGapInsteadOfCuttingText() {
+        // 목표 지점(200) 근처엔 여백이 없고 멀리(110~120)에만 있음 → 그 여백에서 자름
+        val cuts = ThreadsKit.cutPoints(rows(400, listOf(110..120)), 100)
+        assertEquals(115, cuts[1])
+    }
 }

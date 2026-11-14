@@ -78,7 +78,10 @@ object ThreadsKit {
             val best = cands
                 .filter { Math.abs(it.first - target) <= ideal * 0.4f && it.first - prev >= ideal * 0.45f && bottom - it.first >= ideal * 0.45f }
                 .minByOrNull { Math.abs(it.first - target) - minOf(it.second, 80) * 2 }
-            var cut = best?.first
+            // 가까운 여백이 없으면 범위를 넓혀서라도 여백에서 자름 (글자 줄이 잘리지 않게)
+            var cut = best?.first ?: cands
+                .filter { it.first - prev >= ideal * 0.3f && bottom - it.first >= ideal * 0.3f && it.first - prev <= w * 2.4f }
+                .minByOrNull { Math.abs(it.first - target) }?.first
             if (cut == null) {
                 // 여백이 없으면: 사진 안이면 사진 경계로 옮기고, 아니면 목표 지점에서 자름
                 val r = inAvoid(target)
@@ -93,22 +96,32 @@ object ThreadsKit {
         return cuts
     }
 
+    /**
+     * 여백 줄인지: 배경색과 다른 점이 거의 없으면 여백.
+     * 페이지 양옆의 테두리 선·스크롤바 같은 가는 세로선은 무시 (전체의 1.5%까지 허용).
+     */
+    fun isBlankRow(row: IntArray): Boolean {
+        val base = row[row.size / 2]
+        var diff = 0
+        var n = 0
+        var x = 0
+        while (x < row.size) {
+            val p = row[x]
+            val d = Math.abs(((p shr 16) and 255) - ((base shr 16) and 255)) +
+                Math.abs(((p shr 8) and 255) - ((base shr 8) and 255)) + Math.abs((p and 255) - (base and 255))
+            if (d > 30) diff++
+            n++
+            x += 2
+        }
+        return diff <= maxOf(2, n * 15 / 1000)
+    }
+
     fun split(src: Bitmap, avoid: List<IntRange> = emptyList()): List<Bitmap> {
         val w = src.width
         val row = IntArray(w)
         val blank = BooleanArray(src.height) { y ->
             src.getPixels(row, 0, w, 0, y, w, 1)
-            val base = row[w / 2]
-            var ok = true
-            var x = 0
-            while (x < w) {
-                val p = row[x]
-                val d = Math.abs(((p shr 16) and 255) - ((base shr 16) and 255)) +
-                    Math.abs(((p shr 8) and 255) - ((base shr 8) and 255)) + Math.abs((p and 255) - (base and 255))
-                if (d > 30) { ok = false; break }
-                x += 3
-            }
-            ok
+            isBlankRow(row)
         }
         val cuts = cutPoints(blank, w, avoid)
         return cuts.zipWithNext { a, b -> Bitmap.createBitmap(src, 0, a, w, b - a) }

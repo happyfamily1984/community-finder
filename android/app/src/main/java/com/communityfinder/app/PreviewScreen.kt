@@ -54,7 +54,7 @@ fun mobileUrl(post: Post): String {
         "dcinside" -> m("[?&]id=([^&]+).*[?&]no=(\\d+)")?.let { "https://m.dcinside.com/board/${it[1]}/${it[2]}" }
         "ruliweb" -> m("bbs\\.ruliweb\\.com(/.*)")?.let { "https://m.ruliweb.com${it[1]}" }
         "clien" -> m("www\\.clien\\.net(/.*)")?.let { "https://m.clien.net${it[1]}" }
-        "natepann" -> m("pann\\.nate\\.com/talk/(\\d+)")?.let { "https://m.pann.nate.com/talk/${it[1]}" }
+        "natepann" -> u // PC 페이지에서 본문만 추려서 보여줌 (PageScanner의 ISOLATE_SELECTORS)
         "bobaedream" -> m("[?&]code=([^&]+).*[?&]No=(\\d+)")?.let { "https://m.bobaedream.co.kr/board/bbs_view/${it[1]}/${it[2]}" }
         "fmkorea" -> m("fmkorea\\.com/(\\d+)")?.let { "https://m.fmkorea.com/${it[1]}" }
         else -> null // 더쿠 등 반응형 사이트는 같은 주소가 모바일 화면

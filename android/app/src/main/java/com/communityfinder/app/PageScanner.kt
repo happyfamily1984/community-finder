@@ -99,6 +99,27 @@ val BODY_SELECTORS = mapOf(
     "jp" to ".article-body, .entry-content, .article-body-inner, #article-body, .entry-body, article",
 )
 
+/**
+ * 본문만 남기기: 본문 요소를 찾아 페이지 전체를 '제목 + 본문'으로 바꿈 (랭킹·베플·추천글 등 제거).
+ * 본문 위치가 확실한 사이트에만 사용. 본문을 못 찾으면 아무것도 하지 않음.
+ */
+val ISOLATE_SELECTORS = mapOf(
+    "natepann" to "#contentArea", // PC 페이지 기준 (GitHub 공개 코드로 확인)
+)
+
+private fun isolateJs(title: String, sel: String) = """
+(function(){try{
+  var c=document.querySelector(${JSONObject.quote(sel)}); if(!c||(c.innerText||'').trim().length+c.querySelectorAll('img,video').length===0) return false;
+  c.querySelectorAll('img').forEach(function(i){var d=i.getAttribute('data-src')||i.getAttribute('data-original')||i.getAttribute('data-lazy-src'); if(d) i.src=d; i.removeAttribute('width'); i.removeAttribute('height'); i.loading='eager';});
+  var t=document.createElement('div'); t.textContent=${JSONObject.quote(title)};
+  var html='<div id="cf"><h1 class="cf_title">'+t.innerHTML+'</h1><div class="cf_body">'+c.innerHTML+'</div></div>';
+  document.querySelectorAll('meta[name=viewport]').forEach(function(m){m.remove();});
+  document.head.insertAdjacentHTML('beforeend','<meta name="viewport" content="width=device-width,initial-scale=1"><style>html,body{margin:0!important;padding:0!important;background:#fff!important;width:auto!important;min-width:0!important}#cf{padding:16px 14px;font-size:17px;line-height:1.65;color:#111;word-break:break-word;font-family:sans-serif}#cf .cf_title{font-size:21px;font-weight:800;line-height:1.35;margin:0 0 16px}#cf *{max-width:100%!important;box-sizing:border-box;float:none!important}#cf img,#cf video{height:auto!important;display:block;margin:8px 0}</style>');
+  document.body.innerHTML=html; document.body.className=''; window.scrollTo(0,0);
+  return true;
+}catch(x){return false;}})()
+"""
+
 /** 캡처 전에 광고와 댓글 영역을 숨김 */
 private const val HIDE_ADS_JS = """
 (function(){try{
@@ -158,6 +179,7 @@ fun PageScanner(post: Post, attempt: Int, onState: (ScanState) -> Unit) {
     var webHeightPx by remember(attempt) { mutableIntStateOf(screenHeightPx) }
     var webView by remember { mutableStateOf<WebView?>(null) }
     var busy by remember(attempt) { mutableStateOf(false) }
+    var isolated by remember(attempt) { mutableStateOf(false) }
 
     DisposableEffect(attempt) { onDispose { webView?.destroy(); webView = null } }
 
@@ -166,6 +188,11 @@ fun PageScanner(post: Post, attempt: Int, onState: (ScanState) -> Unit) {
     suspend fun capture(wv: WebView) {
         if (busy) return
         busy = true
+        ISOLATE_SELECTORS[post.source]?.let { sel ->
+            onState(ScanState.Loading(87, "본문만 추리는 중"))
+            if (eval(wv, isolateJs(post.title, sel)) == "true") isolated = true
+            delay(700)
+        }
         eval(wv, HIDE_ADS_JS)
         val lang = langOf(post.source)
         if (isGlobal(post.source)) {
@@ -183,14 +210,14 @@ fun PageScanner(post: Post, attempt: Int, onState: (ScanState) -> Unit) {
         onState(ScanState.Loading(90, "글 전체 펼치는 중"))
         delay(600)
         fun parse(raw: String?) = runCatching { JSONObject(JSONArray("[$raw]").getString(0)) }.getOrNull()
-        val first = parse(eval(wv, analyzeJs(post.title, AUTHOR_SELECTORS[post.source.substringBefore("-")].orEmpty(), BODY_SELECTORS[post.source.substringBefore("-")].orEmpty())))
+        val first = parse(eval(wv, analyzeJs(post.title, AUTHOR_SELECTORS[post.source.substringBefore("-")].orEmpty(), if (isolated) "#cf" else BODY_SELECTORS[post.source.substringBefore("-")].orEmpty())))
         val cssW = first?.optDouble("w")?.takeIf { it > 0 } ?: (widthPx / density.density).toDouble()
         val fullPx = ((first?.optDouble("h") ?: 0.0) * widthPx / cssW).toInt().coerceAtLeast(screenHeightPx)
         webHeightPx = fullPx.coerceAtMost(MAX_SCAN_HEIGHT_PX)
         onState(ScanState.Loading(95, "이미지 불러오는 중"))
         delay(1800)
         // 늘어난 화면 기준으로 위치 다시 측정
-        val info = parse(eval(wv, analyzeJs(post.title, AUTHOR_SELECTORS[post.source.substringBefore("-")].orEmpty(), BODY_SELECTORS[post.source.substringBefore("-")].orEmpty()))) ?: first
+        val info = parse(eval(wv, analyzeJs(post.title, AUTHOR_SELECTORS[post.source.substringBefore("-")].orEmpty(), if (isolated) "#cf" else BODY_SELECTORS[post.source.substringBefore("-")].orEmpty()))) ?: first
         onState(ScanState.Loading(99, "캡처 중"))
         try {
             val bmp = Bitmap.createBitmap(wv.width.coerceAtLeast(1), wv.height.coerceAtLeast(1), Bitmap.Config.ARGB_8888)
