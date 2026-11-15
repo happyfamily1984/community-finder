@@ -19,7 +19,7 @@ object ThreadsAuto {
     class Job(val text: String, val startedAt: Long = System.currentTimeMillis(), var composeClicked: Boolean = false)
     class SwitchJob(
         val account: String, val startedAt: Long = System.currentTimeMillis(), var lastActionAt: Long = 0, var actions: Int = 0, var scrolls: Int = 0,
-        var step: String = "", var stepSince: Long = 0, var stepTries: Int = 0,
+        var step: String = "", var stepSince: Long = 0, var stepTries: Int = 0, var backs: Int = 0,
     )
 
     /** 계정 전환 기록 (문제 파악용). 설정 화면에서 볼 수 있음 */
@@ -40,8 +40,9 @@ object ThreadsAuto {
     fun startSwitch(ctx: Context, account: String): Boolean {
         val launch = ctx.packageManager.getLaunchIntentForPackage(ThreadsKit.THREADS_PACKAGE) ?: return false
         switching = SwitchJob(account.trim().removePrefix("@"))
-        clearLog(); log("전환 시작 → $account (v1.7.4)")
-        ctx.startActivity(launch.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+        clearLog(); log("전환 시작 → $account (v1.7.5)")
+        // 스레드를 홈 화면부터 새로 엶 (글쓰기 등 다른 화면에 있었어도 탭 바가 보이도록)
+        ctx.startActivity(launch.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK))
         return true
     }
 
@@ -114,10 +115,14 @@ class ThreadsAutoService : AccessibilityService() {
             if (now - job.startedAt > 4000 && now - job.lastActionAt > 1500) endSwitch("계정 전환 실패: 스레드 화면이 아니에요 (${root?.packageName ?: "화면 정보 없음"})")
             return
         }
-        if (now - job.lastActionAt < 600) return // 누른 뒤 화면이 바뀔 시간
+        if (now - job.lastActionAt < 900) return // 누른 뒤 화면이 바뀔 시간
 
-        fun has(text: String) = root.findAccessibilityNodeInfosByText(text).orEmpty().isNotEmpty()
-        fun exact(text: String) = root.findAccessibilityNodeInfosByText(text).orEmpty().firstOrNull { label(it).trim().equals(text, true) }
+        // 화면의 글자를 한 번 훑어서 모아 둠.
+        // (스레드는 시스템의 '글자로 찾기' 기능이 통하지 않아서, 요소를 하나씩 직접 살펴봐야 함)
+        val labels = ArrayList<Pair<AccessibilityNodeInfo, String>>()
+        walk(root) { n -> label(n).trim().let { if (it.isNotEmpty()) labels += n to it } }
+        fun has(text: String) = labels.any { it.second.contains(text, true) }
+        fun exact(text: String) = labels.firstOrNull { it.second.equals(text, true) }?.first
         val screen = Rect().also { root.getBoundsInScreen(it) }
 
         // 지금 어느 화면인지
@@ -131,7 +136,12 @@ class ThreadsAutoService : AccessibilityService() {
         val stepKey = if (step == "설정") "설정#${job.scrolls}" else step
         if (stepKey != job.step) { job.step = stepKey; job.stepSince = now; job.stepTries = 0; ThreadsAuto.log("[$step]") }
         // 같은 화면에서 두 번 눌러도 안 바뀌고 1초가 지났으면 실패
-        if (job.stepTries >= 2 && now - job.stepSince > 1000) { endSwitch("계정 전환 실패: '$step' 단계에서 다음으로 넘어가지 않아요"); return }
+        if (job.stepTries >= 2 && now - job.stepSince > 1800) {
+            // 다음에 고칠 수 있도록, 멈춘 화면에 어떤 글자·버튼이 있는지 기록
+            ThreadsAuto.log("── 화면 글자: " + labels.take(40).joinToString(" | ") { it.second.take(14) })
+            dump(root, screen, top = true)
+            endSwitch("계정 전환 실패: '$step' 단계에서 다음으로 넘어가지 않아요"); return
+        }
 
         fun press(what: String, node: AccessibilityNodeInfo?) {
             // 화면이 아직 그려지는 중일 수 있으니, 버튼이 안 보여도 1.5초까지는 기다림
@@ -143,15 +153,13 @@ class ThreadsAutoService : AccessibilityService() {
 
         when (step) {
             "로그인 화면" -> {
-                val target = exact(job.account) ?: root.findAccessibilityNodeInfosByText(job.account).orEmpty().firstOrNull()
+                val target = exact(job.account) ?: labels.firstOrNull { it.second.contains(job.account, true) }?.first
                 ThreadsAuto.log("  계정 ${describe(target)}")
                 job.stepTries++
                 if (target != null && click(target)) endSwitch("${job.account} 계정으로 로그인했어요.")
                 else if (target == null && job.stepTries >= 2) endSwitch("계정 전환 실패: 로그인 화면에 ${job.account} 계정이 없어요. 스레드에 그 계정으로 한 번 로그인해 두세요.")
             }
-            "로그아웃 확인" -> press("확인 버튼",
-                root.findAccessibilityNodeInfosByText("로그아웃").orEmpty().firstOrNull { label(it).trim() == "로그아웃" }
-                    ?: root.findAccessibilityNodeInfosByText("Log out").orEmpty().firstOrNull { label(it).trim().equals("Log out", true) })
+            "로그아웃 확인" -> press("확인 버튼", exact("로그아웃") ?: exact("Log out"))
             "설정" -> {
                 val logout = exact("로그아웃") ?: exact("Log out")
                 if (logout != null) press("로그아웃", logout)
@@ -175,7 +183,14 @@ class ThreadsAutoService : AccessibilityService() {
                 // 이름표("프로필") → id에 profile이 들어간 탭 → 탭 바 줄의 맨 오른쪽 순으로 찾음. 찾은 버튼의 위치만 누름
                 val bottom = { r: Rect -> r.centerY() > screen.top + screen.height() * 0.7f }
                 val tab = byLabel(root, listOf("프로필", "Profile"), bottom) ?: byId(root, listOf("profile"), bottom) ?: bottomRightClickable(root, screen)
-                if (tab == null && job.stepTries == 0) dump(root, screen, top = false)
+                if (tab == null && now - job.stepSince > 1200 && job.backs < 4) {
+                    // 글쓰기·글 상세처럼 탭이 안 보이는 화면: 뒤로가기로 빠져나옴
+                    ThreadsAuto.log("  탭이 안 보여서 뒤로가기 (${job.backs + 1})")
+                    if (job.backs == 0) dump(root, screen, top = false)
+                    performGlobalAction(GLOBAL_ACTION_BACK)
+                    job.backs++; job.lastActionAt = System.currentTimeMillis(); job.stepSince = job.lastActionAt
+                    return
+                }
                 press("프로필 탭", tab)
             }
         }
