@@ -71,7 +71,26 @@ class MainActivity : ComponentActivity() {
         android.webkit.WebView.enableSlowWholeDocumentDraw()
         enableEdgeToEdge()
         HotPostWorker.schedule(this)
+        handleIntent(intent)
         setContent { AppTheme { App() } }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleIntent(intent)
+    }
+
+    /** 알림에서 넘어온 글이 있으면 앱 안에서 열도록 전달 */
+    private fun handleIntent(intent: Intent?) {
+        val json = intent?.getStringExtra(EXTRA_POST) ?: return
+        intent.removeExtra(EXTRA_POST)
+        runCatching { PostStore.fromJson(org.json.JSONObject(json)) }.getOrNull()?.let { pendingPost.value = it }
+    }
+
+    companion object {
+        const val EXTRA_POST = "post"
+        /** 알림을 눌러 열어야 할 글 (App이 받아서 미리보기를 띄움) */
+        val pendingPost = mutableStateOf<Post?>(null)
     }
 }
 
@@ -162,6 +181,16 @@ fun App() {
     // 글 누르면 앱 안에서 모바일 화면 스캔 이미지로 보기
     var preview by remember { mutableStateOf<Post?>(null) }
     val open: (Post) -> Unit = { PostStore.recent(ctx).add(it); storeVersion++; preview = it }
+
+    // 알림을 눌러 들어온 글 → 앱 안 미리보기로 열기
+    val fromNotification = MainActivity.pendingPost.value
+    LaunchedEffect(fromNotification) {
+        if (fromNotification != null) {
+            exportPost = null
+            open(fromNotification)
+            MainActivity.pendingPost.value = null
+        }
+    }
 
     if (preview != null) BackHandler { preview = null }
     if (exportPost != null) BackHandler { exportPost = null }

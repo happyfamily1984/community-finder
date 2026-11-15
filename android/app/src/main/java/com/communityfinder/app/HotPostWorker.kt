@@ -96,7 +96,11 @@ class HotPostWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ct
                 val src = feed.sourceById[p.source]?.name ?: p.source
                 val open = PendingIntent.getActivity(
                     ctx, p.id.hashCode(),
-                    Intent(Intent.ACTION_VIEW, Uri.parse(p.url)),
+                    // 알림을 누르면 원본 사이트가 아니라 이 앱의 글 미리보기 화면을 엶
+                    Intent(ctx, MainActivity::class.java)
+                        .putExtra(MainActivity.EXTRA_POST, PostStore.toJson(p).toString())
+                        .setData(Uri.parse("communityfinder://post/${p.id.hashCode()}"))
+                        .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP),
                     PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
                 )
                 val n = NotificationCompat.Builder(ctx, CHANNEL_ID)

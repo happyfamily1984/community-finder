@@ -91,6 +91,27 @@ object Gemini {
         return 200 to (0 until arr.length()).map { arr.optString(it, chunk[it]) }
     }
 
+    /** 자유 질문 (요약 등). 실패하면 null → 호출한 쪽이 Groq으로 넘어감 */
+    suspend fun ask(ctx: Context, system: String, user: String): String? = withContext(Dispatchers.IO) {
+        val prefs = Prefs(ctx)
+        if (!usable(prefs)) return@withContext null
+        runCatching {
+            for (model in candidates(prefs)) {
+                val body = JSONObject()
+                    .put("systemInstruction", JSONObject().put("parts", JSONArray().put(JSONObject().put("text", system))))
+                    .put("contents", JSONArray().put(JSONObject().put("role", "user").put("parts", JSONArray().put(JSONObject().put("text", user)))))
+                    .put("generationConfig", JSONObject().put("temperature", 0.4))
+                val (code, text) = request("POST", "$BASE/models/$model:generateContent", prefs.geminiKey, body.toString())
+                if (code == 401 || code == 403) { lastError = "HTTP $code: ${errorMessage(text)}"; return@runCatching null }
+                if (code != 200) { lastError = "HTTP $code ($model): ${errorMessage(text)}"; continue }
+                val parts = JSONObject(text).optJSONArray("candidates")?.optJSONObject(0)?.optJSONObject("content")?.optJSONArray("parts")
+                val out = parts?.let { p -> (0 until p.length()).joinToString("") { p.getJSONObject(it).optString("text") } }?.trim().orEmpty()
+                if (out.isNotEmpty()) { prefs.geminiModel = model; lastError = null; return@runCatching out }
+            }
+            null
+        }.getOrElse { lastError = it.message ?: "연결 실패"; null }
+    }
+
     /** texts를 한국어로 번역. 실패하면 null (→ 예비 번역으로 대체) */
     suspend fun translate(ctx: Context, texts: List<String>, context: String = "", force: Boolean = false): List<String>? = withContext(Dispatchers.IO) {
         val prefs = Prefs(ctx)

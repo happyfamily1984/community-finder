@@ -22,6 +22,7 @@
         android:theme="@style/Theme.CommunityFinder">
         <activity
             android:name=".MainActivity"
+            android:launchMode="singleTop"
             android:exported="true"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>

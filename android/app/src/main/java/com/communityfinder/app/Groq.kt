@@ -56,6 +56,24 @@ object Groq {
         return pickModel(text)?.also { prefs.groqModel = it }
     }
 
+    /** 자유 질문 (요약 등). 실패하면 null */
+    suspend fun ask(ctx: Context, system: String, user: String): String? = withContext(Dispatchers.IO) {
+        val prefs = Prefs(ctx)
+        if (!usable(prefs)) return@withContext null
+        runCatching {
+            val model = model(prefs) ?: return@runCatching null
+            val body = JSONObject().put("model", model).put("temperature", 0.4)
+                .put("messages", JSONArray()
+                    .put(JSONObject().put("role", "system").put("content", system))
+                    .put(JSONObject().put("role", "user").put("content", user)))
+            val (code, text) = request("POST", "$BASE/chat/completions", prefs.groqKey, body.toString())
+            if (code == 429) { prefs.groqCooldownUntil = System.currentTimeMillis() + COOLDOWN_MS; lastError = "무료 한도를 다 썼어요"; return@runCatching null }
+            if (code != 200) { lastError = "HTTP $code"; return@runCatching null }
+            lastError = null
+            JSONObject(text).getJSONArray("choices").getJSONObject(0).getJSONObject("message").getString("content").trim().takeIf { it.isNotEmpty() }
+        }.getOrElse { lastError = it.message ?: "연결 실패"; null }
+    }
+
     suspend fun translate(ctx: Context, texts: List<String>, context: String = ""): List<String>? = withContext(Dispatchers.IO) {
         val prefs = Prefs(ctx)
         if (texts.isEmpty()) return@withContext emptyList()

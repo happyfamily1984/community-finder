@@ -80,3 +80,19 @@ class RedditRssTest {
         assertTrue(posts[0].score > posts[1].score)
     }
 }
+
+class SummarizerTest {
+    @Test
+    fun cleansAndLimitsLength() {
+        assertEquals("주식에 전재산 넣었다가 망했다.", Summarizer.clean("요약: \"주식에 전재산 넣었다가 망했다.\""))
+        val long = "가나다라마바사. ".repeat(100)
+        val c = Summarizer.clean(long)
+        assertTrue(c.length <= Summarizer.MAX_SUMMARY_CHARS && c.endsWith("."))
+    }
+
+    @Test
+    fun usesLongerBodyText() {
+        val input = Summarizer.buildInput("제목", "짧음", "이미지에서 읽은 긴 본문 내용")
+        assertTrue(input.startsWith("제목: 제목") && input.contains("이미지에서 읽은 긴 본문 내용") && !input.contains("짧음"))
+    }
+}

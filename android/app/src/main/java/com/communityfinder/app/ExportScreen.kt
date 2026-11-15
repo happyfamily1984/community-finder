@@ -51,7 +51,10 @@ fun ExportDetail(post: Post, source: Source?, onBack: () -> Unit) {
     var mosaicOn by remember { mutableStateOf(true) }
     var result by remember { mutableStateOf<ExportResult?>(null) }
     // 스레드 본문: 제목 + 커뮤니티 이름만 (감상평 없음)
-    val review = post.title + "\n\n" + ThreadsKit.sourceLine(post.source, sourceName)
+    // 스레드 본문: 글 내용 요약 (요약 전이거나 실패하면 제목)
+    var review by remember { mutableStateOf(post.title) }
+    var summaryState by remember { mutableStateOf("") } // "", "working", "done", 또는 실패 사유
+    var summaryRun by remember { mutableIntStateOf(0) }
     var zoomIndex by remember { mutableStateOf<Int?>(null) }
     var showAutoHelp by remember { mutableStateOf(false) }
 
@@ -90,6 +93,18 @@ fun ExportDetail(post: Post, source: Source?, onBack: () -> Unit) {
             val pieces = ThreadsKit.split(body, done.imageRects.map { (it.top - c.top)..(it.bottom - c.top) })
             ExportResult(pieces, ThreadsKit.writeCache(ctx, post.id, pieces), done.text)
         }
+    }
+
+    // 이미지가 준비되면 자동으로 요약 (Gemini → Groq). '다시 요약'을 누르면 재실행
+    val readyPieces = result?.pieces
+    LaunchedEffect(readyPieces != null, summaryRun) {
+        val ps = readyPieces ?: return@LaunchedEffect
+        if (summaryRun == 0 && summaryState == "done") return@LaunchedEffect
+        if (!Summarizer.hasKey(ctx)) { summaryState = "요약하려면 설정에서 Gemini나 Groq 무료 키를 넣어주세요. 지금은 제목만 들어가요."; return@LaunchedEffect }
+        summaryState = "working"
+        val sum = Summarizer.summarize(ctx, post.title, result?.text.orEmpty(), ps)
+        if (sum != null) { review = sum; summaryState = "done" }
+        else summaryState = "요약 실패: ${Gemini.lastError ?: Groq.lastError ?: "알 수 없는 오류"} · 지금은 제목만 들어가요."
     }
 
     // 사진을 누르면 전체 화면 미리보기 (좌우로 넘기기, 긴 사진은 위아래 스크롤, 누르면 닫힘)
@@ -153,12 +168,33 @@ fun ExportDetail(post: Post, source: Source?, onBack: () -> Unit) {
                         }
                     }
 
-                    // 스레드에 들어갈 글 (자동 입력됨)
+                    // 스레드에 들어갈 글: 내용 요약 (자동 입력됨, 직접 고칠 수 있음)
                     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer), shape = RoundedCornerShape(18.dp)) {
                         Column(Modifier.fillMaxWidth().padding(16.dp)) {
-                            Text("스레드에 들어갈 글", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                            Spacer(Modifier.height(4.dp))
-                            Text(review, fontSize = 15.sp, lineHeight = 21.sp)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("스레드에 들어갈 글 (내용 요약)", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(1f))
+                                Text("${review.length}/500", fontSize = 12.sp, color = if (review.length > 500) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            Spacer(Modifier.height(8.dp))
+                            OutlinedTextField(review, { review = it }, Modifier.fillMaxWidth(), textStyle = LocalTextStyle.current.copy(fontSize = 15.sp, lineHeight = 21.sp))
+                            Spacer(Modifier.height(8.dp))
+                            when (summaryState) {
+                                "working" -> Row(verticalAlignment = Alignment.CenterVertically) {
+                                    CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                                    Spacer(Modifier.width(8.dp)); Text("글 내용을 읽고 요약하는 중…", fontSize = 13.sp)
+                                }
+                                "", "done" -> {}
+                                else -> Text(summaryState, fontSize = 13.sp, lineHeight = 18.sp, color = MaterialTheme.colorScheme.error)
+                            }
+                            Spacer(Modifier.height(6.dp))
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                OutlinedButton(enabled = result != null && summaryState != "working", onClick = { summaryRun++ }) {
+                                    Icon(Icons.Filled.Refresh, null, Modifier.size(18.dp)); Spacer(Modifier.width(4.dp)); Text("다시 요약")
+                                }
+                                Button(onClick = { ThreadsKit.copy(ctx, "본문", review) }) {
+                                    Icon(Icons.Filled.ContentCopy, null, Modifier.size(18.dp)); Spacer(Modifier.width(4.dp)); Text("복사하기")
+                                }
+                            }
                         }
                     }
                     Spacer(Modifier.height(4.dp))
