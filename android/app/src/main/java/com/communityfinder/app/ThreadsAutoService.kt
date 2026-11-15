@@ -125,13 +125,14 @@ class ThreadsAutoService : AccessibilityService() {
             if (exact(job.account) != null || exact("@${job.account}") != null) { endSwitch("이미 ${job.account} 계정이에요."); return }
             val gear = find(root) { n -> label(n).let { it == "설정" || it.equals("Settings", true) || it == "메뉴" || it == "더 보기" } }
                 ?: topRightClickable(root, screen)
-            if ((gear != null && click(gear)) || tap(screen.width() * 0.927f, screen.top + screen.height() * 0.036f)) acted()
+            if (gear != null && click(gear)) acted() else job.actions++
             return
         }
         // 5) 그 밖의 화면(홈 등): 아래쪽 맨 오른쪽 프로필 탭
         val profileTab = find(root) { n -> label(n).let { it == "프로필" || it.equals("Profile", true) } && n.isClickable }
             ?: bottomRightClickable(root, screen)
-        if ((profileTab != null && click(profileTab)) || tap(screen.width() * 0.866f, screen.top + screen.height() * 0.962f)) acted()
+        // 버튼을 못 찾으면 아무 데나 누르지 않음 (휴대폰의 홈/최근 앱 버튼을 잘못 누르지 않도록)
+        if (profileTab != null && click(profileTab)) acted() else job.actions++
     }
 
     private fun endSwitch(message: String) {
@@ -140,22 +141,26 @@ class ThreadsAutoService : AccessibilityService() {
         Toast.makeText(this, message, Toast.LENGTH_LONG).show()
     }
 
-    private fun topRightClickable(root: AccessibilityNodeInfo, screen: Rect): AccessibilityNodeInfo? {
-        var best: AccessibilityNodeInfo? = null; var bestRight = 0
+    /** 화면의 한 가로줄에 나란히 놓인 작은 버튼들 (탭 바, 상단 아이콘 줄) 찾기 */
+    private fun buttonRows(root: AccessibilityNodeInfo, screen: Rect, inBand: (Rect) -> Boolean): Map<Int, List<Pair<AccessibilityNodeInfo, Rect>>> {
+        val list = ArrayList<Pair<AccessibilityNodeInfo, Rect>>()
         walk(root) { n ->
             val r = Rect().also { n.getBoundsInScreen(it) }
-            if (n.isClickable && r.height() in 1..(screen.height() / 10) && r.centerY() < screen.top + screen.height() * 0.08f && r.right > bestRight) { best = n; bestRight = r.right }
+            if (n.isClickable && n.isVisibleToUser && !r.isEmpty && r.width() < screen.width() / 3 && r.height() < screen.height() / 8 && inBand(r)) list += n to r
         }
-        return best
+        return list.groupBy { it.second.centerY() / 48 }
     }
 
+    /** 스레드 상단 오른쪽 끝 아이콘(설정): 화면 위쪽 20% 안에서 가장 위 줄의 맨 오른쪽 버튼 */
+    private fun topRightClickable(root: AccessibilityNodeInfo, screen: Rect): AccessibilityNodeInfo? {
+        val rows = buttonRows(root, screen) { it.centerY() < screen.top + screen.height() * 0.2f }
+        return rows.minByOrNull { it.key }?.value?.maxByOrNull { it.second.right }?.first
+    }
+
+    /** 스레드 아래 탭 바의 맨 오른쪽(프로필): 화면 아래 30% 안에서 버튼이 4개 이상 나란한 줄 중 가장 아래 줄의 맨 오른쪽 */
     private fun bottomRightClickable(root: AccessibilityNodeInfo, screen: Rect): AccessibilityNodeInfo? {
-        var best: AccessibilityNodeInfo? = null; var bestRight = 0
-        walk(root) { n ->
-            val r = Rect().also { n.getBoundsInScreen(it) }
-            if (n.isClickable && r.width() < screen.width() / 3 && r.centerY() > screen.top + screen.height() * 0.92f && r.right > bestRight) { best = n; bestRight = r.right }
-        }
-        return best
+        val rows = buttonRows(root, screen) { it.centerY() > screen.top + screen.height() * 0.7f }
+        return rows.filter { it.value.size >= 4 }.maxByOrNull { it.key }?.value?.maxByOrNull { it.second.right }?.first
     }
 
     // ---------------- 공통 도구 ----------------
