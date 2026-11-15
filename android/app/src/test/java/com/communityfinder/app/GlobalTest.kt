@@ -85,6 +85,7 @@ class SummarizerTest {
     @Test
     fun cleansAndLimitsLength() {
         assertEquals("주식에 전재산 넣었다가 망했다.", Summarizer.clean("요약: \"주식에 전재산 넣었다가 망했다.\""))
+        assertEquals("첫 줄이다.\n\n둘째 줄.\n\n셋째 줄.", Summarizer.clean("첫 줄이다.\n\n\n- 둘째 줄.\n\n2. 셋째 줄."))
         val long = "가나다라마바사. ".repeat(100)
         val c = Summarizer.clean(long)
         assertTrue(c.length <= Summarizer.MAX_SUMMARY_CHARS && c.endsWith("."))
