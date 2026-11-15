@@ -37,7 +37,7 @@ object ThreadsAuto {
     fun startSwitch(ctx: Context, account: String): Boolean {
         val launch = ctx.packageManager.getLaunchIntentForPackage(ThreadsKit.THREADS_PACKAGE) ?: return false
         switching = SwitchJob(account.trim().removePrefix("@"))
-        clearLog(); log("전환 시작 → $account")
+        clearLog(); log("전환 시작 → $account (v1.7.3)")
         ctx.startActivity(launch.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
         return true
     }
@@ -213,13 +213,26 @@ class ThreadsAutoService : AccessibilityService() {
 
     private fun label(n: AccessibilityNodeInfo) = (n.text ?: n.contentDescription)?.toString().orEmpty()
 
-    /** 누를 수 있는 부모를 찾아 클릭, 안 되면 그 위치를 터치 */
+    private var clickAttempt = 0
+
+    /**
+     * 요소 누르기. 요소 자체가 '누를 수 있음'이면 그대로 클릭.
+     * 아니면 (1) 그 위치를 실제 터치처럼 누르기 (2) 누를 수 있는 부모에 클릭 보내기 를 번갈아 시도
+     * — 스레드 탭은 부모에 클릭을 보내도 반응이 없는 경우가 있음.
+     */
     private fun click(node: AccessibilityNodeInfo): Boolean {
-        var t: AccessibilityNodeInfo? = node
-        while (t != null && !t.isClickable) t = t.parent
-        if (t?.performAction(AccessibilityNodeInfo.ACTION_CLICK) == true) return true
         val r = Rect().also { node.getBoundsInScreen(it) }
-        return !r.isEmpty && tap(r.exactCenterX(), r.exactCenterY())
+        if (node.isClickable && node.performAction(AccessibilityNodeInfo.ACTION_CLICK)) { ThreadsAuto.log("  → 직접 클릭"); return true }
+        val useTouch = clickAttempt++ % 2 == 0
+        if (useTouch && !r.isEmpty && tap(r.exactCenterX(), r.exactCenterY())) { ThreadsAuto.log("  → 터치 (${r.centerX()}, ${r.centerY()})"); return true }
+        var t: AccessibilityNodeInfo? = node.parent
+        while (t != null && !t.isClickable) t = t.parent
+        if (t?.performAction(AccessibilityNodeInfo.ACTION_CLICK) == true) {
+            ThreadsAuto.log("  → 부모 클릭 [${t.className?.toString()?.substringAfterLast('.')} ${Rect().also { b -> t.getBoundsInScreen(b) }}]"); return true
+        }
+        if (!useTouch && !r.isEmpty && tap(r.exactCenterX(), r.exactCenterY())) { ThreadsAuto.log("  → 터치 (${r.centerX()}, ${r.centerY()})"); return true }
+        ThreadsAuto.log("  → 누르기 실패")
+        return false
     }
 
     /** 휴대폰 맨 아래 내비게이션 바(홈/뒤로/최근 앱)가 시작되는 y 좌표. 그 아래는 절대 누르지 않음 */
@@ -234,9 +247,11 @@ class ThreadsAutoService : AccessibilityService() {
     }
 
     private fun tap(x: Float, y: Float): Boolean = runCatching {
-        if (y >= navBarTop() - 4) { ThreadsAuto.log("누르려는 위치가 휴대폰 내비게이션 바라서 취소 (y=$y)"); return false }
+        if (y >= navBarTop() - 4) { ThreadsAuto.log("  누르려는 위치가 휴대폰 내비게이션 바라서 취소 (y=$y, 바 시작=${navBarTop()})"); return false }
         val path = Path().apply { moveTo(x, y) }
-        dispatchGesture(GestureDescription.Builder().addStroke(GestureDescription.StrokeDescription(path, 0, 60)).build(), null, null)
+        val ok = dispatchGesture(GestureDescription.Builder().addStroke(GestureDescription.StrokeDescription(path, 0, 80)).build(), null, null)
+        if (!ok) ThreadsAuto.log("  터치 권한이 없음 → 접근성에서 '스레드 자동 입력'을 껐다 켜주세요")
+        ok
     }.getOrDefault(false)
 
     private fun swipeUp(screen: Rect): Boolean = runCatching {
