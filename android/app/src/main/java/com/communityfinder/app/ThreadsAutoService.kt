@@ -19,6 +19,15 @@ object ThreadsAuto {
     class Job(val text: String, val startedAt: Long = System.currentTimeMillis(), var composeClicked: Boolean = false)
     class SwitchJob(val account: String, val startedAt: Long = System.currentTimeMillis(), var lastActionAt: Long = 0, var actions: Int = 0, var scrolls: Int = 0)
 
+    /** 계정 전환 기록 (문제 파악용). 설정 화면에서 볼 수 있음 */
+    private val logBuf = StringBuilder()
+    @Synchronized fun log(line: String) {
+        if (logBuf.length > 12000) logBuf.delete(0, 4000)
+        logBuf.append(java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US).format(java.util.Date())).append(' ').append(line).append('\n')
+    }
+    @Synchronized fun logText(): String = logBuf.toString().ifEmpty { "기록이 없어요. '이 계정으로 전환'을 먼저 눌러주세요." }
+    @Synchronized fun clearLog() { logBuf.setLength(0) }
+
     @Volatile var pending: Job? = null
     @Volatile var switching: SwitchJob? = null
 
@@ -28,6 +37,7 @@ object ThreadsAuto {
     fun startSwitch(ctx: Context, account: String): Boolean {
         val launch = ctx.packageManager.getLaunchIntentForPackage(ThreadsKit.THREADS_PACKAGE) ?: return false
         switching = SwitchJob(account.trim().removePrefix("@"))
+        clearLog(); log("전환 시작 → $account")
         ctx.startActivity(launch.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
         return true
     }
@@ -90,8 +100,8 @@ class ThreadsAutoService : AccessibilityService() {
         val now = System.currentTimeMillis()
         if (now - job.startedAt > 60_000 || job.actions > 25) { endSwitch("계정 전환을 끝내지 못했어요. 스레드에서 직접 전환해 주세요."); return }
         if (now - job.lastActionAt < 1100) return // 화면이 바뀔 시간을 줌
-        val root = rootInActiveWindow ?: return
-        if (root.packageName != ThreadsKit.THREADS_PACKAGE) return
+        val root = rootInActiveWindow ?: run { ThreadsAuto.log("화면 정보를 못 읽음(root 없음)"); job.actions++; return }
+        if (root.packageName != ThreadsKit.THREADS_PACKAGE) { ThreadsAuto.log("스레드가 아닌 화면: ${root.packageName}"); job.actions++; job.lastActionAt = now; return }
         fun acted() { job.lastActionAt = System.currentTimeMillis(); job.actions++ }
         fun has(text: String) = root.findAccessibilityNodeInfosByText(text).orEmpty().isNotEmpty()
         fun exact(text: String) = root.findAccessibilityNodeInfosByText(text).orEmpty().firstOrNull { label(it).trim().equals(text, true) }
@@ -100,6 +110,7 @@ class ThreadsAutoService : AccessibilityService() {
         // 1) 로그인 화면(저장된 계정 목록): 원하는 계정을 누르면 끝
         if (has("로그인 또는 가입") || has("다른 프로필 사용") || has("Log in or sign up")) {
             val target = exact(job.account) ?: root.findAccessibilityNodeInfosByText(job.account).orEmpty().firstOrNull()
+            ThreadsAuto.log("로그인 화면 · 계정 ${if (target != null) "찾음" else "못 찾음"}")
             if (target != null && click(target)) endSwitch("${job.account} 계정으로 로그인했어요.")
             else if (target == null && job.actions > 3) endSwitch("로그인 화면에 ${job.account} 계정이 없어요. 스레드에 그 계정으로 한 번 로그인해 두세요.")
             else job.actions++
@@ -109,12 +120,14 @@ class ThreadsAutoService : AccessibilityService() {
         if (has("로그아웃하시겠어요") || has("Log out of")) {
             val btn = root.findAccessibilityNodeInfosByText("로그아웃").orEmpty().firstOrNull { label(it).trim() == "로그아웃" }
                 ?: root.findAccessibilityNodeInfosByText("Log out").orEmpty().firstOrNull { label(it).trim().equals("Log out", true) }
-            if (btn != null && click(btn)) acted()
+            ThreadsAuto.log("로그아웃 확인 창 · 버튼 ${if (btn != null) "찾음" else "못 찾음"}")
+            if (btn != null && click(btn)) acted() else job.actions++
             return
         }
         // 3) 설정 화면: 맨 아래 '로그아웃'까지 내려가서 누름
         if ((has("Meta 계정") || has("개인정보 보호") || has("설정 더 보기")) && (exact("설정") != null || has("Meta 계정"))) {
             val logout = exact("로그아웃") ?: exact("Log out")
+            ThreadsAuto.log("설정 화면 · 로그아웃 ${if (logout != null) "찾음" else "안 보임 → 스크롤"}")
             if (logout != null && click(logout)) { acted(); return }
             val scroller = find(root) { it.isScrollable }
             if (scroller?.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD) == true || swipeUp(screen)) { job.scrolls++; acted() }
@@ -123,20 +136,51 @@ class ThreadsAutoService : AccessibilityService() {
         // 4) 프로필 화면: 이미 원하는 계정이면 끝, 아니면 오른쪽 위 설정(톱니바퀴)
         if (has("프로필 편집") || has("Edit profile")) {
             if (exact(job.account) != null || exact("@${job.account}") != null) { endSwitch("이미 ${job.account} 계정이에요."); return }
-            val gear = find(root) { n -> label(n).let { it == "설정" || it.equals("Settings", true) || it == "메뉴" || it == "더 보기" } }
+            val gear = byLabel(root, listOf("설정", "Settings", "메뉴", "Menu", "더 보기", "More")) { r -> r.centerY() < screen.top + screen.height() * 0.2f && r.centerX() > screen.width() / 2 }
+                ?: byId(root, listOf("setting", "menu"))
                 ?: topRightClickable(root, screen)
-            if (gear != null && click(gear)) acted() else job.actions++
+            ThreadsAuto.log("프로필 화면 · 설정 버튼 ${describe(gear)}")
+            if (gear != null && click(gear)) acted() else { job.actions++; if (job.actions % 4 == 1) dump(root, screen, top = true) }
             return
         }
         // 5) 그 밖의 화면(홈 등): 아래쪽 맨 오른쪽 프로필 탭
-        val profileTab = find(root) { n -> label(n).let { it == "프로필" || it.equals("Profile", true) } && n.isClickable }
+        // 이름표("프로필") → id에 profile이 들어간 탭 → 탭 바 줄의 맨 오른쪽 순으로 찾음. 찾은 버튼의 위치만 누름
+        val bottom = { r: Rect -> r.centerY() > screen.top + screen.height() * 0.7f }
+        val profileTab = byLabel(root, listOf("프로필", "Profile"), bottom)
+            ?: byId(root, listOf("profile"), bottom)
             ?: bottomRightClickable(root, screen)
-        // 버튼을 못 찾으면 아무 데나 누르지 않음 (휴대폰의 홈/최근 앱 버튼을 잘못 누르지 않도록)
-        if (profileTab != null && click(profileTab)) acted() else job.actions++
+        ThreadsAuto.log("그 밖의 화면 · 프로필 탭 ${describe(profileTab)}")
+        if (profileTab != null && click(profileTab)) acted() else { job.actions++; if (job.actions % 4 == 1) dump(root, screen, top = false) }
     }
+
+    private fun describe(n: AccessibilityNodeInfo?): String {
+        n ?: return "못 찾음"
+        val r = Rect().also { n.getBoundsInScreen(it) }
+        return "찾음 [${n.className?.toString()?.substringAfterLast('.')} '${label(n).take(20)}' ${n.viewIdResourceName?.substringAfterLast('/') ?: ""} $r]"
+    }
+
+    /** 문제 파악용: 화면 위쪽/아래쪽 띠에 있는 요소들을 기록 */
+    private fun dump(root: AccessibilityNodeInfo, screen: Rect, top: Boolean) {
+        var count = 0
+        ThreadsAuto.log("── 화면 요소(${if (top) "위" else "아래"}쪽) · 화면 $screen ──")
+        walk(root) { n ->
+            val r = Rect().also { n.getBoundsInScreen(it) }
+            val inBand = if (top) r.centerY() < screen.top + screen.height() * 0.2f else r.centerY() > screen.top + screen.height() * 0.7f
+            if (inBand && !r.isEmpty && r.width() < screen.width() * 0.6f && count++ < 40) {
+                ThreadsAuto.log("  ${n.className?.toString()?.substringAfterLast('.')} '${label(n).take(16)}' id=${n.viewIdResourceName?.substringAfterLast('/') ?: "-"} click=${n.isClickable} $r")
+            }
+        }
+    }
+
+    private fun byLabel(root: AccessibilityNodeInfo, labels: List<String>, where: (Rect) -> Boolean = { true }): AccessibilityNodeInfo? =
+        find(root) { n -> label(n).trim().let { l -> labels.any { l.equals(it, true) } } && where(Rect().also { n.getBoundsInScreen(it) }) }
+
+    private fun byId(root: AccessibilityNodeInfo, parts: List<String>, where: (Rect) -> Boolean = { true }): AccessibilityNodeInfo? =
+        find(root) { n -> n.viewIdResourceName?.substringAfterLast('/')?.lowercase()?.let { id -> parts.any { id.contains(it) } } == true && where(Rect().also { n.getBoundsInScreen(it) }) }
 
     private fun endSwitch(message: String) {
         ThreadsAuto.switching = null
+        ThreadsAuto.log("끝: $message")
         handler.removeCallbacks(tick)
         Toast.makeText(this, message, Toast.LENGTH_LONG).show()
     }
@@ -146,7 +190,9 @@ class ThreadsAutoService : AccessibilityService() {
         val list = ArrayList<Pair<AccessibilityNodeInfo, Rect>>()
         walk(root) { n ->
             val r = Rect().also { n.getBoundsInScreen(it) }
-            if (n.isClickable && n.isVisibleToUser && !r.isEmpty && r.width() < screen.width() / 3 && r.height() < screen.height() / 8 && inBand(r)) list += n to r
+            // 누를 수 있다고 표시되지 않은 아이콘도 포함 (스레드 탭은 그렇게 표시되지 않을 수 있음)
+            val iconLike = n.isClickable || n.childCount == 0 || n.className?.toString()?.contains("Image") == true || n.className?.toString()?.contains("Button") == true
+            if (iconLike && n.isVisibleToUser && !r.isEmpty && r.width() in 24..(screen.width() / 3) && r.height() in 24..(screen.height() / 8) && inBand(r)) list += n to r
         }
         return list.groupBy { it.second.centerY() / 48 }
     }
@@ -176,7 +222,19 @@ class ThreadsAutoService : AccessibilityService() {
         return !r.isEmpty && tap(r.exactCenterX(), r.exactCenterY())
     }
 
+    /** 휴대폰 맨 아래 내비게이션 바(홈/뒤로/최근 앱)가 시작되는 y 좌표. 그 아래는 절대 누르지 않음 */
+    private fun navBarTop(): Int {
+        val wm = getSystemService(android.view.WindowManager::class.java)
+        return if (android.os.Build.VERSION.SDK_INT >= 30) {
+            val m = wm.currentWindowMetrics
+            m.bounds.bottom - m.windowInsets.getInsetsIgnoringVisibility(android.view.WindowInsets.Type.navigationBars()).bottom
+        } else {
+            (resources.displayMetrics.heightPixels * 0.94f).toInt()
+        }
+    }
+
     private fun tap(x: Float, y: Float): Boolean = runCatching {
+        if (y >= navBarTop() - 4) { ThreadsAuto.log("누르려는 위치가 휴대폰 내비게이션 바라서 취소 (y=$y)"); return false }
         val path = Path().apply { moveTo(x, y) }
         dispatchGesture(GestureDescription.Builder().addStroke(GestureDescription.StrokeDescription(path, 0, 60)).build(), null, null)
     }.getOrDefault(false)

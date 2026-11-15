@@ -61,6 +61,7 @@ fun SettingsScreen(feed: Feed?, onBack: (() -> Unit)? = null, onSetup: (() -> Un
     var geminiStatus by remember { mutableStateOf<String?>(null) }
     var threadsAccount by remember { mutableStateOf(prefs.threadsAccount) }
     var switchMsg by remember { mutableStateOf<String?>(null) }
+    var switchLog by remember { mutableStateOf<String?>(null) }
     var groqKey by remember { mutableStateOf(prefs.groqKey) }
     var groqStatus by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
@@ -221,6 +222,16 @@ fun SettingsScreen(feed: Feed?, onBack: (() -> Unit)? = null, onSetup: (() -> Un
                         }
                     }) { Text("이 계정으로 전환", fontWeight = FontWeight.Bold) }
                     switchMsg?.let { Spacer(Modifier.height(8.dp)); Text(it, fontSize = 13.sp, color = MaterialTheme.colorScheme.error) }
+                    TextButton(onClick = { switchLog = ThreadsAuto.logText() }) { Text("전환 기록 보기") }
+                    switchLog?.let { logText ->
+                        AlertDialog(
+                            onDismissRequest = { switchLog = null },
+                            title = { Text("전환 기록") },
+                            text = { Text(logText, fontSize = 11.sp, lineHeight = 15.sp, modifier = Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) },
+                            confirmButton = { TextButton(onClick = { ThreadsKit.copy(ctx, "전환 기록", logText); switchLog = null }) { Text("복사하기") } },
+                            dismissButton = { TextButton(onClick = { switchLog = null }) { Text("닫기") } },
+                        )
+                    }
                 }
 
                 // 번역 엔진
