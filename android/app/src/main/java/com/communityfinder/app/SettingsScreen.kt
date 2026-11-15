@@ -59,6 +59,8 @@ fun SettingsScreen(feed: Feed?, onBack: (() -> Unit)? = null, onSetup: (() -> Un
     var redditId by remember { mutableStateOf(prefs.redditClientId) }
     var geminiKey by remember { mutableStateOf(prefs.geminiKey) }
     var geminiStatus by remember { mutableStateOf<String?>(null) }
+    var threadsAccount by remember { mutableStateOf(prefs.threadsAccount) }
+    var switchMsg by remember { mutableStateOf<String?>(null) }
     var groqKey by remember { mutableStateOf(prefs.groqKey) }
     var groqStatus by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
@@ -198,6 +200,27 @@ fun SettingsScreen(feed: Feed?, onBack: (() -> Unit)? = null, onSetup: (() -> Un
                         Spacer(Modifier.width(12.dp))
                         PurpleSwitch(fmLocal) { fmLocal = it; prefs.fmkoreaLocal = it }
                     }
+                }
+
+                // 스레드 계정 전환
+                SettingsCard {
+                    AccentTitle("스레드 계정 전환")
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "버튼을 누르면 스레드 앱을 열어, 지금 계정이 아래 계정이 아니면 로그아웃하고 저장된 계정 목록에서 아래 계정으로 다시 로그인해요. 이미 그 계정이면 아무것도 하지 않아요. (접근성의 '스레드 자동 입력'이 켜져 있어야 해요)",
+                        fontSize = 13.sp, lineHeight = 19.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    OutlinedPillField(threadsAccount, { threadsAccount = it; prefs.threadsAccount = it }, "계정 이름 (예: utgingeul_archive)", 50.dp, 14.sp)
+                    Spacer(Modifier.height(10.dp))
+                    Button(shape = CircleShape, enabled = threadsAccount.isNotBlank(), onClick = {
+                        switchMsg = when {
+                            !ThreadsAuto.isEnabled(ctx) -> "먼저 접근성에서 '커뮤니티 파인더 · 스레드 자동 입력'을 켜주세요. (아래 '처음 설정 다시 보기')"
+                            !ThreadsAuto.startSwitch(ctx, prefs.threadsAccount) -> "스레드 앱이 설치되어 있지 않아요."
+                            else -> null
+                        }
+                    }) { Text("이 계정으로 전환", fontWeight = FontWeight.Bold) }
+                    switchMsg?.let { Spacer(Modifier.height(8.dp)); Text(it, fontSize = 13.sp, color = MaterialTheme.colorScheme.error) }
                 }
 
                 // 번역 엔진

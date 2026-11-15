@@ -25,10 +25,34 @@ object FmkoreaLocal {
 
     val SOURCE_TEMPLATE = Source(ID, "에펨코리아", "포텐 터짐", 0xFF4A7BD0, ok = false, error = null)
 
-    data class RawPost(val no: String, val title: String, val comments: Int?, val likes: Int?)
+    data class RawPost(val no: String, val title: String, val comments: Int?, val likes: Int?, val postedAt: Long? = null)
+
+    /** 목록의 "8 시간 전", "11 분 전", "14:05", "2026.11.14" 같은 표기를 시각으로 변환 */
+    fun parseTime(text: String, now: Long): Long? {
+        Regex("(\\d+)\\s*(초|분|시간|일)\\s*전").find(text)?.let { m ->
+            val n = m.groupValues[1].toLong()
+            val unit = when (m.groupValues[2]) { "초" -> 1000L; "분" -> 60_000L; "시간" -> 3_600_000L; else -> 86_400_000L }
+            return now - n * unit
+        }
+        Regex("(20\\d{2})[.-](\\d{1,2})[.-](\\d{1,2})").find(text)?.let { m ->
+            return runCatching {
+                java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("Asia/Seoul")).apply {
+                    set(m.groupValues[1].toInt(), m.groupValues[2].toInt() - 1, m.groupValues[3].toInt(), 12, 0, 0)
+                }.timeInMillis
+            }.getOrNull()
+        }
+        Regex("(?<![\\d:])(\\d{1,2}):(\\d{2})(?![\\d:])").find(text)?.let { m ->
+            val cal = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("Asia/Seoul")).apply { timeInMillis = now }
+            cal.set(java.util.Calendar.HOUR_OF_DAY, m.groupValues[1].toInt()); cal.set(java.util.Calendar.MINUTE, m.groupValues[2].toInt()); cal.set(java.util.Calendar.SECOND, 0)
+            var t = cal.timeInMillis
+            if (t > now + 60_000) t -= 86_400_000L // 미래 시각이면 어제 글
+            return t
+        }
+        return null
+    }
 
     /** /best 목록 HTML 파싱 */
-    fun parse(html: String): List<RawPost> {
+    fun parse(html: String, now: Long = System.currentTimeMillis()): List<RawPost> {
         val doc = Jsoup.parse(html, URL_BEST)
         val seen = HashSet<String>()
         return doc.select("li.li").mapNotNull { row ->
@@ -46,7 +70,10 @@ object FmkoreaLocal {
                 no = no,
                 title = title,
                 comments = countOf(row.selectFirst(".comment_count")?.text()),
-                likes = countOf(row.selectFirst(".pc_voted_count .count")?.text()),
+                likes = countOf(row.selectFirst(".pc_voted_count .count")?.text())
+                    ?: Regex("추천\\s*(\\d[\\d,]*)").find(row.text())?.groupValues?.get(1)?.replace(",", "")?.toIntOrNull(),
+                // 글 작성 시각 (맨 위에 고정된 '화제' 글이 최신 글로 잘못 정렬되지 않도록)
+                postedAt = parseTime(row.text().replace(title, " "), now),
             )
         }
     }
@@ -139,7 +166,7 @@ object FmkoreaLocal {
             if (code != 200) return cached("HTTP $code")
 
             val html = conn.inputStream.bufferedReader().use { it.readText() }
-            val raw = parse(html)
+            val raw = parse(html, now)
             if (raw.isEmpty()) return cached("글을 찾지 못했어요 (사이트 구조 변경 가능성)")
 
             val scores = score(raw)
@@ -147,7 +174,7 @@ object FmkoreaLocal {
             val newFirstSeen = JSONObject()
             val posts = raw.mapIndexed { i, r ->
                 val id = "$ID:https://www.fmkorea.com/${r.no}"
-                val fs = firstSeen.optLong(id, now)
+                val fs = r.postedAt ?: firstSeen.optLong(id, now)
                 newFirstSeen.put(id, fs)
                 Post(id, ID, r.title, "https://www.fmkorea.com/${r.no}", null, r.comments, r.likes, scores[i], 0, fs)
             }

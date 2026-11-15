@@ -75,6 +75,11 @@ class Prefs(ctx: Context) {
         get() = sp.getString("redditClientId", "") ?: ""
         set(v) = sp.edit().putString("redditClientId", v.trim()).apply()
 
+    /** 계정 전환으로 로그인할 스레드 계정 이름 */
+    var threadsAccount: String
+        get() = sp.getString("threadsAccount", "utgingeul_archive") ?: "utgingeul_archive"
+        set(v) = sp.edit().putString("threadsAccount", v.trim().removePrefix("@")).apply()
+
     var onboardingDone: Boolean
         get() = sp.getBoolean("onboardingDone", false)
         set(v) = sp.edit().putBoolean("onboardingDone", v).apply()

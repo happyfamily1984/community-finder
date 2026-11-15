@@ -97,3 +97,22 @@ class SummarizerTest {
         assertTrue(input.startsWith("제목: 제목") && input.contains("이미지에서 읽은 긴 본문 내용") && !input.contains("짧음"))
     }
 }
+
+class LocalFallbackTest {
+    @Test
+    fun countsAndScores() {
+        assertEquals(12000, LocalFallback.parseCount("조회 1.2만"))
+        assertEquals(1234, LocalFallback.parseCount("1,234"))
+        assertEquals(null, LocalFallback.parseCount("-"))
+        val s = LocalFallback.scores(listOf(listOf(100, 5, null), listOf(1000, 50, null), listOf(10, 1, null)))
+        assertTrue(s[1] == 85 && s[1] > s[0] && s[0] > s[2])
+    }
+
+    @Test
+    fun fmkoreaTimeParsing() {
+        val now = 1_800_000_000_000L
+        assertEquals(now - 8 * 3_600_000L, FmkoreaLocal.parseTime("유머 / 8 시간 전 / 닉 / 추천 3096", now))
+        assertEquals(now - 11 * 60_000L, FmkoreaLocal.parseTime("11 분 전 / 닉", now))
+        assertEquals(null, FmkoreaLocal.parseTime("시간 없음", now))
+    }
+}

@@ -117,7 +117,7 @@ enum class Tab(val label: String, val on: ImageVector, val off: ImageVector) {
     SETTINGS("설정", Icons.Filled.Settings, Icons.Outlined.Settings),
 }
 
-enum class SortBy(val label: String) { SCORE("화제도"), SURGE("급상승"), VIEWS("조회수"), COMMENTS("댓글"), LIKES("추천"), LATEST("최신") }
+enum class SortBy(val label: String) { LATEST("최신"), SCORE("화제도"), SURGE("급상승"), VIEWS("조회수"), COMMENTS("댓글"), LIKES("추천") }
 
 /** 글 열기: 브라우저로 열고 최근 본 글에 기록 */
 fun openPost(ctx: Context, p: Post) {
@@ -291,7 +291,7 @@ fun HomeScreen(
     onRefresh: () -> Unit, onOpen: (Post) -> Unit, onLongPress: (Post) -> Unit, onBell: () -> Unit,
 ) {
     var source by rememberSaveable { mutableStateOf("") }
-    var sort by rememberSaveable { mutableStateOf(SortBy.SCORE) }
+    var sort by rememberSaveable { mutableStateOf(SortBy.LATEST) }
     var query by rememberSaveable { mutableStateOf("") }
     var sortMenu by remember { mutableStateOf(false) }
 

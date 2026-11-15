@@ -15,6 +15,8 @@ data class Source(
     val color: Long,
     val ok: Boolean,
     val error: String?,
+    /** 클라우드 수집이 막혔을 때 휴대폰에서 대신 받아오기 위한 파싱 규칙 */
+    val local: LocalSpec? = null,
 )
 
 data class Post(
@@ -49,6 +51,7 @@ data class Feed(val updatedAt: Long, val sources: List<Source>, val posts: List<
                         color = parseColor(s.optString("color")),
                         ok = st?.optBoolean("ok", false) ?: false,
                         error = st?.optString("error")?.takeIf { it.isNotEmpty() },
+                        local = LocalSpec.parse(s.optJSONObject("local")),
                     )
                 }
             }
@@ -120,6 +123,10 @@ object FeedRepository {
         if (prefs.fmkoreaLocal) {
             val (src, posts) = if (network) FmkoreaLocal.load(ctx) else FmkoreaLocal.cachedOnly(ctx)
             f = merge(f, src, posts)
+        }
+        // 클라우드 수집이 실패한 국내 커뮤니티는 휴대폰에서 대신 받아옴 (성공하면 오래된 글을 새 목록으로 교체)
+        feed.sources.filter { !it.ok && it.local != null && !isGlobal(it.id) }.forEach { src ->
+            LocalFallback.load(ctx, src, network)?.let { (s2, posts) -> if (posts.isNotEmpty()) f = merge(f, s2, posts) else f = f.copy(sources = f.sources.map { if (it.id == s2.id) s2 else it }) }
         }
         if (prefs.redditLocal || prefs.redditClientId.isNotBlank()) RedditLocal.load(ctx, network).forEach { (src, posts) -> f = merge(f, src, posts) }
         return f

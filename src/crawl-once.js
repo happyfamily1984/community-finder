@@ -16,7 +16,11 @@ await crawler.crawl();
 const feed = {
   version: 1,
   updatedAt: crawler.lastCrawlAt,
-  sources: SOURCES.map(({ id, name, board, url, color }) => ({ id, name, board, url, color, status: crawler.status[id] })),
+  // local: 클라우드 수집이 막혔을 때 앱이 휴대폰에서 직접 받아올 수 있도록 목록 파싱 규칙을 같이 보냄
+  sources: SOURCES.map(({ id, name, board, url, color, selectors, keepParams, titleStrip }) => ({
+    id, name, board, url, color, status: crawler.status[id],
+    ...(selectors ? { local: { url, selectors, keepParams: keepParams ?? [], titleStrip: titleStrip ?? '' } } : {}),
+  })),
   posts: crawler.list({ sort: 'score', limit: 500 }).map(
     ({ id, source, title, url, views, comments, likes, score, viewsPerMin, firstSeenAt, rank, image }) => ({
       id, source, title, url, views, comments, likes, score, viewsPerMin, firstSeenAt, rank, ...(image ? { image } : {}),
