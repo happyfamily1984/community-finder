@@ -19,7 +19,7 @@ object ThreadsAuto {
     class Job(val text: String, val startedAt: Long = System.currentTimeMillis(), var composeClicked: Boolean = false)
     class SwitchJob(
         val account: String, val startedAt: Long = System.currentTimeMillis(), var lastActionAt: Long = 0, var actions: Int = 0, var scrolls: Int = 0,
-        var step: String = "", var stepSince: Long = 0, var stepTries: Int = 0, var backs: Int = 0,
+        var step: String = "", var stepSince: Long = 0, var stepTries: Int = 0, var backs: Int = 0, var loggedOut: Boolean = false,
     )
 
     /** 계정 전환 기록 (문제 파악용). 설정 화면에서 볼 수 있음 */
@@ -40,7 +40,7 @@ object ThreadsAuto {
     fun startSwitch(ctx: Context, account: String): Boolean {
         val launch = ctx.packageManager.getLaunchIntentForPackage(ThreadsKit.THREADS_PACKAGE) ?: return false
         switching = SwitchJob(account.trim().removePrefix("@"))
-        clearLog(); log("전환 시작 → $account (v1.7.5)")
+        clearLog(); log("전환 시작 → $account (v1.7.6)")
         // 스레드를 홈 화면부터 새로 엶 (글쓰기 등 다른 화면에 있었어도 탭 바가 보이도록)
         ctx.startActivity(launch.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK))
         return true
@@ -108,11 +108,11 @@ class ThreadsAutoService : AccessibilityService() {
     private fun stepSwitch() {
         val job = ThreadsAuto.switching ?: return
         val now = System.currentTimeMillis()
-        if (now - job.startedAt > 25_000) { endSwitch("계정 전환 실패: 시간이 너무 오래 걸려요 (${job.step})"); return }
+        if (now - job.startedAt > 40_000) { endSwitch("계정 전환 실패: 시간이 너무 오래 걸려요 (${job.step})"); return }
         val root = rootInActiveWindow
         if (root == null || root.packageName != ThreadsKit.THREADS_PACKAGE) {
-            // 스레드 앱이 뜨는 동안은 최대 4초 기다림
-            if (now - job.startedAt > 4000 && now - job.lastActionAt > 1500) endSwitch("계정 전환 실패: 스레드 화면이 아니에요 (${root?.packageName ?: "화면 정보 없음"})")
+            // 스레드가 켜지거나(시작 직후) 로그아웃 뒤 다시 켜지는 동안은 화면 정보가 없음 → 마지막 동작 후 10초까지 기다림
+            if (now - maxOf(job.startedAt, job.lastActionAt) > 10_000) endSwitch("계정 전환 실패: 스레드 화면이 아니에요 (${root?.packageName ?: "화면 정보 없음"})")
             return
         }
         if (now - job.lastActionAt < 900) return // 누른 뒤 화면이 바뀔 시간
@@ -159,7 +159,7 @@ class ThreadsAutoService : AccessibilityService() {
                 if (target != null && click(target)) endSwitch("${job.account} 계정으로 로그인했어요.")
                 else if (target == null && job.stepTries >= 2) endSwitch("계정 전환 실패: 로그인 화면에 ${job.account} 계정이 없어요. 스레드에 그 계정으로 한 번 로그인해 두세요.")
             }
-            "로그아웃 확인" -> press("확인 버튼", exact("로그아웃") ?: exact("Log out"))
+            "로그아웃 확인" -> { press("확인 버튼", exact("로그아웃") ?: exact("Log out")); job.loggedOut = true }
             "설정" -> {
                 val logout = exact("로그아웃") ?: exact("Log out")
                 if (logout != null) press("로그아웃", logout)
@@ -183,6 +183,8 @@ class ThreadsAutoService : AccessibilityService() {
                 // 이름표("프로필") → id에 profile이 들어간 탭 → 탭 바 줄의 맨 오른쪽 순으로 찾음. 찾은 버튼의 위치만 누름
                 val bottom = { r: Rect -> r.centerY() > screen.top + screen.height() * 0.7f }
                 val tab = byLabel(root, listOf("프로필", "Profile"), bottom) ?: byId(root, listOf("profile"), bottom) ?: bottomRightClickable(root, screen)
+                // 로그아웃한 뒤에는 스레드가 다시 켜지며 로그인 화면이 뜰 때까지 아무것도 누르지 않고 기다림
+                if (job.loggedOut) { if (tab == null) return; if (now - job.lastActionAt < 3000) return }
                 if (tab == null && now - job.stepSince > 1200 && job.backs < 4) {
                     // 글쓰기·글 상세처럼 탭이 안 보이는 화면: 뒤로가기로 빠져나옴
                     ThreadsAuto.log("  탭이 안 보여서 뒤로가기 (${job.backs + 1})")

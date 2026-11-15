@@ -26,7 +26,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.SwitchAccount
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Star
@@ -275,11 +275,19 @@ fun Header(showDot: Boolean, onBell: () -> Unit) {
         Image(painterResource(R.drawable.app_logo), null, Modifier.size(38.dp).clip(RoundedCornerShape(10.dp)))
         Spacer(Modifier.width(10.dp))
         Text("커뮤니티 파인더", fontSize = 21.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.weight(1f))
-        IconButton(onClick = onBell) {
-            Box {
-                Icon(Icons.Filled.Notifications, "알림 설정", tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f))
-                if (showDot) Box(Modifier.align(Alignment.TopEnd).size(8.dp).background(HotRed, CircleShape))
+        // 스레드 계정 전환 (설정에 적어 둔 계정으로). 접근성이 꺼져 있으면 설정 화면으로 안내
+        val ctx = LocalContext.current
+        TextButton(onClick = {
+            val account = Prefs(ctx).threadsAccount
+            when {
+                account.isBlank() -> { Toast.makeText(ctx, "설정에서 전환할 스레드 계정을 먼저 적어주세요", Toast.LENGTH_LONG).show(); onBell() }
+                !ThreadsAuto.isEnabled(ctx) -> { Toast.makeText(ctx, "접근성에서 '스레드 자동 입력'을 먼저 켜주세요", Toast.LENGTH_LONG).show(); onBell() }
+                !ThreadsAuto.startSwitch(ctx, account) -> Toast.makeText(ctx, "스레드 앱이 설치되어 있지 않아요", Toast.LENGTH_LONG).show()
             }
+        }) {
+            Icon(Icons.Filled.SwitchAccount, null, Modifier.size(20.dp))
+            Spacer(Modifier.width(4.dp))
+            Text("계정 전환", fontWeight = FontWeight.Bold, fontSize = 14.sp)
         }
     }
 }
