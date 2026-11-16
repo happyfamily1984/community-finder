@@ -59,7 +59,7 @@ fun ExportDetail(post: Post, source: Source?, onBack: () -> Unit) {
     var showAutoHelp by remember { mutableStateOf(false) }
 
     if (showAutoHelp) {
-        val send = { showAutoHelp = false; result?.files?.let { ThreadsKit.shareToThreads(ctx, it, review) }; Unit }
+        val send = { showAutoHelp = false; result?.files?.let { ThreadsKit.shareToThreads(ctx, it, review); onBack() }; Unit }
         AlertDialog(
             onDismissRequest = { showAutoHelp = false },
             title = { Text("자동 입력 켜기") },
@@ -222,7 +222,8 @@ fun ExportDetail(post: Post, source: Source?, onBack: () -> Unit) {
                     val body = review
                     ThreadsKit.copy(ctx, "본문", body) // 자동 입력이 안 되면 붙여넣기만 하면 되도록
                     if (ThreadsAuto.isEnabled(ctx)) ThreadsAuto.start(body) else showAutoHelp = true
-                    if (!showAutoHelp) ThreadsKit.shareToThreads(ctx, files, body)
+                    // 스레드로 보낸 뒤에는 이 내보내기 화면을 닫음 (돌아오면 목록이 보이도록)
+                    if (!showAutoHelp) { ThreadsKit.shareToThreads(ctx, files, body); onBack() }
                 }
             }, modifier = Modifier.weight(1f))
         }

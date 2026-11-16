@@ -100,7 +100,7 @@ object Gemini {
                 val body = JSONObject()
                     .put("systemInstruction", JSONObject().put("parts", JSONArray().put(JSONObject().put("text", system))))
                     .put("contents", JSONArray().put(JSONObject().put("role", "user").put("parts", JSONArray().put(JSONObject().put("text", user)))))
-                    .put("generationConfig", JSONObject().put("temperature", 0.4))
+                    .put("generationConfig", JSONObject().put("temperature", 0.8))
                 val (code, text) = request("POST", "$BASE/models/$model:generateContent", prefs.geminiKey, body.toString())
                 if (code == 401 || code == 403) { lastError = "HTTP $code: ${errorMessage(text)}"; return@runCatching null }
                 if (code != 200) { lastError = "HTTP $code ($model): ${errorMessage(text)}"; continue }

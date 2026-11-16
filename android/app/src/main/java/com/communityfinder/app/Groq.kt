@@ -62,7 +62,7 @@ object Groq {
         if (!usable(prefs)) return@withContext null
         runCatching {
             val model = model(prefs) ?: return@runCatching null
-            val body = JSONObject().put("model", model).put("temperature", 0.4)
+            val body = JSONObject().put("model", model).put("temperature", 0.8)
                 .put("messages", JSONArray()
                     .put(JSONObject().put("role", "system").put("content", system))
                     .put(JSONObject().put("role", "user").put("content", user)))
