@@ -95,6 +95,8 @@ class SummarizerTest {
     fun promptIncludesBuiltinAndUserExamples() {
         val sys = Summarizer.systemPrompt(listOf("내가 추가한 잘 된 글\n\n둘째 줄"))
         assertTrue(sys.contains("기지국 통신기록조회") && sys.contains("내가 추가한 잘 된 글") && sys.contains("[본보기 2]"))
+        val free = Summarizer.systemPrompt(listOf("내가 추가한 잘 된 글"), useExamples = false)
+        assertTrue(!free.contains("기지국") && !free.contains("본보기 1") && free.contains("정해진 틀 없이"))
         // 최근 5개까지만
         assertTrue(!Summarizer.systemPrompt((1..9).map { "예시 글 번호 $it 입니다 길게" }).contains("예시 글 번호 4 "))
     }

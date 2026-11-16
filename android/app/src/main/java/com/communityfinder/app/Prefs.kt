@@ -85,6 +85,11 @@ class Prefs(ctx: Context) {
         get() = runCatching { org.json.JSONArray(sp.getString("hitExamples", "[]")).let { a -> (0 until a.length()).map { a.getString(it) } } }.getOrDefault(emptyList())
         set(v) = sp.edit().putString("hitExamples", org.json.JSONArray(v).toString()).apply()
 
+    /** 요약할 때 '잘 터진 글' 공식과 본보기를 쓸지 (끄면 글 성격에 맞춰 자유롭게) */
+    var useHitStyle: Boolean
+        get() = sp.getBoolean("useHitStyle", true)
+        set(v) = sp.edit().putBoolean("useHitStyle", v).apply()
+
     var onboardingDone: Boolean
         get() = sp.getBoolean("onboardingDone", false)
         set(v) = sp.edit().putBoolean("onboardingDone", v).apply()

@@ -45,10 +45,28 @@ object Summarizer {
         "특정 개인·집단을 비하하거나 혐오하는 표현은 쓰지 않는다. 작성자 닉네임, 조회수, 날짜, 메뉴 글자는 빼기. " +
         "해시태그, 이모지, 따옴표, 번호, 글머리 기호, 머리말 없이 본문만 출력. 공백과 줄바꿈 포함 350자 이내."
 
+    /** 본보기를 끈 경우: 공식 없이 글 성격에 맞춰 자유롭게 */
+    private const val FREE_RULES = "너는 커뮤니티 게시글을 스레드(Threads)에 올릴 글로 바꿔 쓰는 작가다. " +
+        "입력은 게시글 제목과 본문이며, 본문은 이미지에서 글자를 읽은 것이라 오타나 순서 뒤섞임, 메뉴·버튼 글자가 섞여 있을 수 있다.\n\n" +
+        "정해진 틀 없이, 이 글에 가장 잘 맞는 방식으로 쓴다. 먼저 글의 성격을 판단한다:\n" +
+        "- 웃긴 글: 상황을 짧게 깔고 웃긴 지점에서 툭 끊는다. 설명하지 않는다.\n" +
+        "- 사연·논란: 무슨 일인지 → 어디가 문제인지 → 한 줄 평.\n" +
+        "- 정보·꿀팁: 핵심 사실부터 말하고 필요한 숫자·방법만 덧붙인다.\n" +
+        "- 감동·훈훈: 담담하게 있었던 일만 전한다.\n" +
+        "- 사진·짤 위주: 사진을 보고 싶게 만드는 한두 줄이면 충분하다.\n" +
+        "첫 줄은 스크롤을 멈추게 해야 하지만 방식은 매번 달라야 한다(질문, 대사 인용, 숫자, 상황 묘사, 단정 등). '결국', '진짜 ~는 바로', '~할 수밖에 없었던' 같은 틀에 박힌 표현에 기대지 않는다.\n\n" +
+        "형식: 문장마다 한 줄, 문장 사이에 빈 줄 하나. 길이는 글에 맞게 2~6줄. 한 줄은 40자를 넘기지 않는다.\n" +
+        "말투: 한국 커뮤니티·스레드의 자연스러운 반말 구어체. 문장 끝을 한 가지로 통일하지 말고 섞는다. 억지 유행어·과한 감탄사 금지, ㅋㅋ는 많아야 한 번.\n" +
+        "규칙: 글에 나온 구체적인 단어를 쓴다. 사실은 바꾸지 않고, 글에 없는 내용을 지어내지 않는다. 숫자와 고유명사는 정확히. " +
+        "특정 개인·집단을 비하하거나 혐오하는 표현은 쓰지 않는다. 작성자 닉네임, 조회수, 날짜, 메뉴 글자는 빼기. " +
+        "해시태그, 이모지, 따옴표, 번호, 글머리 기호, 머리말 없이 본문만 출력. 공백과 줄바꿈 포함 350자 이내."
+
     /** 규칙 + 반응 좋았던 본보기 (기본 제공 + 사용자가 앱에서 추가한 것, 최근 5개까지) */
-    fun systemPrompt(userExamples: List<String>): String {
+    fun systemPrompt(userExamples: List<String>, useExamples: Boolean = true): String {
+        if (!useExamples) return FREE_RULES
         val examples = (BUILTIN_EXAMPLES + userExamples).map { it.trim() }.filter { it.isNotEmpty() }.distinct().takeLast(5)
-        return RULES + "\n\n아래는 실제로 반응이 아주 좋았던 글이다. 구조·호흡·말투를 본받되, 내용이나 문장을 그대로 베끼지는 않는다.\n" +
+        return RULES + "\n\n아래는 실제로 반응이 아주 좋았던 글이다. 구조·호흡·말투를 본받되, 내용이나 문장을 그대로 베끼지는 않는다. " +
+            "특히 본보기에 나온 표현('결국', '진짜 ~는 바로', '~할 수밖에 없었던 거지' 등)을 매번 똑같이 쓰지 말고, 같은 역할을 하는 다른 표현으로 바꿔 쓴다.\n" +
             examples.mapIndexed { i, e -> "\n[본보기 ${i + 1}]\n$e\n" }.joinToString("")
     }
 
@@ -87,7 +105,8 @@ object Summarizer {
     suspend fun summarize(ctx: Context, title: String, domText: String, pieces: List<Bitmap>): String? {
         if (!hasKey(ctx)) return null
         val input = buildInput(title, domText, runCatching { readText(pieces) }.getOrDefault(""))
-        val system = systemPrompt(Prefs(ctx).hitExamples)
+        val prefs = Prefs(ctx)
+        val system = systemPrompt(prefs.hitExamples, prefs.useHitStyle)
         val raw = Gemini.ask(ctx, system, input) ?: Groq.ask(ctx, system, input) ?: return null
         return clean(raw).takeIf { it.isNotBlank() }
     }

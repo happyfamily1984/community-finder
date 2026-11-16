@@ -86,7 +86,7 @@ object LocalFallback {
         }
     }
 
-    private fun file(ctx: Context, id: String) = File(ctx.filesDir, "local-$id.json")
+    private fun file(ctx: Context, id: String) = File(ctx.filesDir, "local2-$id.json")
 
     /** network=false면 저장해 둔 결과만. 반환: (상태가 반영된 소스, 글 목록) 또는 저장된 게 없으면 null */
     fun load(ctx: Context, source: Source, network: Boolean, now: Long = System.currentTimeMillis()): Pair<Source, List<Post>>? {
@@ -111,15 +111,28 @@ object LocalFallback {
         conn.setRequestProperty("Accept", "text/html,application/xhtml+xml,*/*;q=0.8")
         return try {
             val code = conn.responseCode
-            if (code == 429 || code == 403 || code == 430) {
+            if (code == 429) {
                 state.put("cooldownUntil", now + COOLDOWN_MS); f.writeText(state.toString())
-                return cached("휴대폰 접근도 제한됨 (HTTP $code) · 30분 뒤 다시 시도")
+                return cached("휴대폰 접근도 제한됨 (HTTP 429) · 30분 뒤 다시 시도")
             }
-            if (code != 200) return cached("휴대폰 수집 HTTP $code")
-            val charset = Regex("charset=([\\w-]+)", RegexOption.IGNORE_CASE).find(conn.contentType.orEmpty())?.groupValues?.get(1) ?: "UTF-8"
-            val html = conn.inputStream.use { String(it.readBytes(), runCatching { charset(charset) }.getOrDefault(Charsets.UTF_8)) }
+            var note = ""
+            val html = when (code) {
+                200 -> {
+                    val charset = Regex("charset=([\\w-]+)", RegexOption.IGNORE_CASE).find(conn.contentType.orEmpty())?.groupValues?.get(1) ?: "UTF-8"
+                    conn.inputStream.use { String(it.readBytes(), runCatching { charset(charset) }.getOrDefault(Charsets.UTF_8)) }
+                }
+                403, 430 -> {
+                    // 일반 요청은 막는 사이트: 휴대폰 브라우저 엔진으로 목록 페이지를 열어서 읽음
+                    note = " (HTTP $code → 브라우저 방식)"
+                    kotlinx.coroutines.runBlocking { WebFetcher.fetchHtml(ctx, spec.url) }.orEmpty()
+                }
+                else -> return cached("휴대폰 수집 HTTP $code")
+            }
             val items = parseList(html, source.id, spec)
-            if (items.isEmpty()) return cached("휴대폰 수집: 글을 찾지 못함")
+            if (items.isEmpty()) {
+                state.put("cooldownUntil", now + COOLDOWN_MS); f.writeText(state.toString())
+                return cached("휴대폰 수집: 글을 찾지 못함$note · 30분 뒤 다시 시도")
+            }
             val sc = scores(items.map { listOf(it.views, it.comments, it.likes) })
             val firstSeen = state.optJSONObject("firstSeen") ?: JSONObject()
             val newSeen = JSONObject()

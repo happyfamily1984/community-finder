@@ -55,6 +55,7 @@ fun ExportDetail(post: Post, source: Source?, onBack: () -> Unit) {
     var review by remember { mutableStateOf(post.title) }
     var summaryState by remember { mutableStateOf("") } // "", "working", "done", 또는 실패 사유
     var summaryRun by remember { mutableIntStateOf(0) }
+    var hitStyle by remember { mutableStateOf(Prefs(ctx).useHitStyle) }
     var zoomIndex by remember { mutableStateOf<Int?>(null) }
     var showAutoHelp by remember { mutableStateOf(false) }
 
@@ -190,12 +191,20 @@ fun ExportDetail(post: Post, source: Source?, onBack: () -> Unit) {
                                 else -> Text(summaryState, fontSize = 13.sp, lineHeight = 18.sp, color = MaterialTheme.colorScheme.error)
                             }
                             Spacer(Modifier.height(6.dp))
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                OutlinedButton(enabled = result != null && summaryState != "working", onClick = { summaryRun++ }) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                OutlinedButton(enabled = result != null && summaryState != "working", contentPadding = PaddingValues(horizontal = 12.dp), onClick = { summaryRun++ }) {
                                     Icon(Icons.Filled.Refresh, null, Modifier.size(18.dp)); Spacer(Modifier.width(4.dp)); Text("다시 요약")
                                 }
                                 Button(onClick = { ThreadsKit.copy(ctx, "본문", review) }) {
                                     Icon(Icons.Filled.ContentCopy, null, Modifier.size(18.dp)); Spacer(Modifier.width(4.dp)); Text("복사하기")
+                                }
+                                Spacer(Modifier.weight(1f))
+                                // 본보기(잘 터진 글 공식) 켜고 끄기. 바꾸면 바로 다시 요약
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text("본보기", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Switch(checked = hitStyle, enabled = summaryState != "working", modifier = Modifier.height(28.dp), onCheckedChange = {
+                                        hitStyle = it; Prefs(ctx).useHitStyle = it; if (result != null) summaryRun++
+                                    })
                                 }
                             }
                         }
