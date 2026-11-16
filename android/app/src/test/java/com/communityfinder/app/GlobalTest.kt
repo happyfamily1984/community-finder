@@ -92,6 +92,14 @@ class SummarizerTest {
     }
 
     @Test
+    fun promptIncludesBuiltinAndUserExamples() {
+        val sys = Summarizer.systemPrompt(listOf("내가 추가한 잘 된 글\n\n둘째 줄"))
+        assertTrue(sys.contains("기지국 통신기록조회") && sys.contains("내가 추가한 잘 된 글") && sys.contains("[본보기 2]"))
+        // 최근 5개까지만
+        assertTrue(!Summarizer.systemPrompt((1..9).map { "예시 글 번호 $it 입니다 길게" }).contains("예시 글 번호 4 "))
+    }
+
+    @Test
     fun usesLongerBodyText() {
         val input = Summarizer.buildInput("제목", "짧음", "이미지에서 읽은 긴 본문 내용")
         assertTrue(input.startsWith("제목: 제목") && input.contains("이미지에서 읽은 긴 본문 내용") && !input.contains("짧음"))

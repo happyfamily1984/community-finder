@@ -80,6 +80,11 @@ class Prefs(ctx: Context) {
         get() = sp.getString("threadsAccount", "utgingeul_archive") ?: "utgingeul_archive"
         set(v) = sp.edit().putString("threadsAccount", v.trim().removePrefix("@")).apply()
 
+    /** 반응이 좋았던 스레드 글 (요약 본보기로 사용). 사용자가 설정에서 추가 */
+    var hitExamples: List<String>
+        get() = runCatching { org.json.JSONArray(sp.getString("hitExamples", "[]")).let { a -> (0 until a.length()).map { a.getString(it) } } }.getOrDefault(emptyList())
+        set(v) = sp.edit().putString("hitExamples", org.json.JSONArray(v).toString()).apply()
+
     var onboardingDone: Boolean
         get() = sp.getBoolean("onboardingDone", false)
         set(v) = sp.edit().putBoolean("onboardingDone", v).apply()

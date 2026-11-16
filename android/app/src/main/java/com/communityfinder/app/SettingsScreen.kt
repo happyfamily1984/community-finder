@@ -62,6 +62,8 @@ fun SettingsScreen(feed: Feed?, onBack: (() -> Unit)? = null, onSetup: (() -> Un
     var threadsAccount by remember { mutableStateOf(prefs.threadsAccount) }
     var switchMsg by remember { mutableStateOf<String?>(null) }
     var switchLog by remember { mutableStateOf<String?>(null) }
+    var hits by remember { mutableStateOf(prefs.hitExamples) }
+    var hitDraft by remember { mutableStateOf("") }
     var groqKey by remember { mutableStateOf(prefs.groqKey) }
     var groqStatus by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
@@ -94,7 +96,7 @@ fun SettingsScreen(feed: Feed?, onBack: (() -> Unit)? = null, onSetup: (() -> Un
                 .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.07f), CircleShape),
         )
 
-        Column(Modifier.fillMaxSize().statusBarsPadding().verticalScroll(rememberScrollState())) {
+        Column(Modifier.fillMaxSize().statusBarsPadding().imePadding().verticalScroll(rememberScrollState())) {
             // 헤더
             Row(
                 Modifier.fillMaxWidth().padding(start = 4.dp, end = 12.dp, top = 4.dp).height(72.dp),
@@ -232,6 +234,30 @@ fun SettingsScreen(feed: Feed?, onBack: (() -> Unit)? = null, onSetup: (() -> Un
                             dismissButton = { TextButton(onClick = { switchLog = null }) { Text("닫기") } },
                         )
                     }
+                }
+
+                // 요약 본보기
+                SettingsCard {
+                    AccentTitle("잘 터진 글 (요약 본보기)")
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "스레드에서 반응이 좋았던 글을 붙여넣어 추가하면, 앞으로 요약할 때 그 글의 구조와 말투를 본받아요. 기본 본보기 ${Summarizer.BUILTIN_EXAMPLES.size}개 + 내가 추가한 ${hits.size}개 (최근 5개까지 사용)",
+                        fontSize = 13.sp, lineHeight = 19.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    OutlinedTextField(
+                        hitDraft, { hitDraft = it }, Modifier.fillMaxWidth().heightIn(min = 96.dp),
+                        placeholder = { Text("잘 된 글 본문을 여기에 붙여넣기", fontSize = 14.sp) },
+                        textStyle = LocalTextStyle.current.copy(fontSize = 14.sp, lineHeight = 20.sp),
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(shape = CircleShape, enabled = hitDraft.trim().length >= 20, onClick = {
+                            hits = (hits + hitDraft.trim()).takeLast(20); prefs.hitExamples = hits; hitDraft = ""
+                        }) { Text("본보기로 추가", fontWeight = FontWeight.Bold) }
+                        OutlinedButton(shape = CircleShape, enabled = hits.isNotEmpty(), onClick = { hits = hits.dropLast(1); prefs.hitExamples = hits }) { Text("마지막 것 삭제") }
+                    }
+                    hits.lastOrNull()?.let { Spacer(Modifier.height(8.dp)); Text("마지막으로 추가한 글: " + it.lineSequence().first().take(30) + "…", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                 }
 
                 // 번역 엔진
