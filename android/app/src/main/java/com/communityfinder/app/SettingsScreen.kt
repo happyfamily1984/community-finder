@@ -64,6 +64,7 @@ fun SettingsScreen(feed: Feed?, onBack: (() -> Unit)? = null, onSetup: (() -> Un
     var switchLog by remember { mutableStateOf<String?>(null) }
     var hits by remember { mutableStateOf(prefs.hitExamples) }
     var hitDraft by remember { mutableStateOf("") }
+    var hitView by remember { mutableStateOf<Pair<String, Boolean>?>(null) }
     var groqKey by remember { mutableStateOf(prefs.groqKey) }
     var groqStatus by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
@@ -255,9 +256,34 @@ fun SettingsScreen(feed: Feed?, onBack: (() -> Unit)? = null, onSetup: (() -> Un
                         Button(shape = CircleShape, enabled = hitDraft.trim().length >= 20, onClick = {
                             hits = (hits + hitDraft.trim()).takeLast(20); prefs.hitExamples = hits; hitDraft = ""
                         }) { Text("본보기로 추가", fontWeight = FontWeight.Bold) }
-                        OutlinedButton(shape = CircleShape, enabled = hits.isNotEmpty(), onClick = { hits = hits.dropLast(1); prefs.hitExamples = hits }) { Text("마지막 것 삭제") }
                     }
-                    hits.lastOrNull()?.let { Spacer(Modifier.height(8.dp)); Text("마지막으로 추가한 글: " + it.lineSequence().first().take(30) + "…", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                    // 본보기 목록: 누르면 전체 내용을 보고, 내가 추가한 것은 지울 수 있음
+                    val all = Summarizer.BUILTIN_EXAMPLES.map { it to false } + hits.map { it to true }
+                    Spacer(Modifier.height(10.dp))
+                    all.forEachIndexed { i, (text, mine) ->
+                        if (i > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                        Row(
+                            Modifier.fillMaxWidth().clickable { hitView = text to mine }.padding(vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(if (mine) "내 글" else "기본", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f), RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 2.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text(text.lineSequence().first(), fontSize = 14.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                            Text("보기 ›", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                    hitView?.let { (text, mine) ->
+                        AlertDialog(
+                            onDismissRequest = { hitView = null },
+                            title = { Text(if (mine) "내가 추가한 본보기" else "기본 본보기") },
+                            text = { Text(text, fontSize = 14.sp, lineHeight = 20.sp, modifier = Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) },
+                            confirmButton = { TextButton(onClick = { hitView = null }) { Text("닫기") } },
+                            dismissButton = {
+                                if (mine) TextButton(onClick = { hits = hits - text; prefs.hitExamples = hits; hitView = null }) { Text("삭제", color = MaterialTheme.colorScheme.error) }
+                            },
+                        )
+                    }
                 }
 
                 // 번역 엔진
