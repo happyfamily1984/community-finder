@@ -90,7 +90,9 @@ fun ExportDetail(post: Post, source: Source?, onBack: () -> Unit) {
             val c = ThreadsKit.cropRect(masked, done.contentRect)
             val body = Bitmap.createBitmap(masked, c.left, c.top, c.width(), c.height())
             // 사진·영상 영역 안에서는 자르지 않도록 위치 전달
-            val pieces = ThreadsKit.split(body, done.imageRects.map { (it.top - c.top)..(it.bottom - c.top) })
+            // 큰 여백은 줄인 뒤에 나눔 (글 사이가 휑하게 비어 캡처되지 않도록)
+            val (compact, avoid) = ThreadsKit.collapseBlank(body, done.imageRects.map { (it.top - c.top)..(it.bottom - c.top) })
+            val pieces = ThreadsKit.split(compact, avoid)
             ExportResult(pieces, ThreadsKit.writeCache(ctx, post.id, pieces), done.text)
         }
     }
@@ -130,7 +132,8 @@ fun ExportDetail(post: Post, source: Source?, onBack: () -> Unit) {
         }
     }
 
-    Column(Modifier.fillMaxSize().statusBarsPadding()) {
+    // imePadding: 키보드가 올라오면 화면을 그만큼 줄여, 입력 중인 줄이 키보드에 가려지지 않게 함
+    Column(Modifier.fillMaxSize().statusBarsPadding().imePadding()) {
         Row(Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "뒤로") }
             Text("스레드용 내보내기", fontSize = 19.sp, fontWeight = FontWeight.ExtraBold)

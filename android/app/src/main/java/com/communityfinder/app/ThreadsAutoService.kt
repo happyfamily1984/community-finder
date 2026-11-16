@@ -40,7 +40,7 @@ object ThreadsAuto {
     fun startSwitch(ctx: Context, account: String): Boolean {
         val launch = ctx.packageManager.getLaunchIntentForPackage(ThreadsKit.THREADS_PACKAGE) ?: return false
         switching = SwitchJob(account.trim().removePrefix("@"))
-        clearLog(); log("전환 시작 → $account (v1.7.6)")
+        clearLog(); log("전환 시작 → $account (v1.7.7)")
         // 스레드를 홈 화면부터 새로 엶 (글쓰기 등 다른 화면에 있었어도 탭 바가 보이도록)
         ctx.startActivity(launch.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK))
         return true
@@ -154,10 +154,17 @@ class ThreadsAutoService : AccessibilityService() {
         when (step) {
             "로그인 화면" -> {
                 val target = exact(job.account) ?: labels.firstOrNull { it.second.contains(job.account, true) }?.first
+                if (target == null) {
+                    // 계정 목록은 화면이 뜬 뒤 조금 늦게 나타남 → 10초까지 기다린 뒤에만 실패로 판단
+                    if (now - job.stepSince > 10_000) {
+                        ThreadsAuto.log("── 화면 글자: " + labels.take(40).joinToString(" | ") { it.second.take(14) })
+                        endSwitch("계정 전환 실패: 로그인 화면에 ${job.account} 계정이 없어요. 스레드에 그 계정으로 한 번 로그인해 두세요.")
+                    }
+                    return
+                }
                 ThreadsAuto.log("  계정 ${describe(target)}")
                 job.stepTries++
-                if (target != null && click(target)) endSwitch("${job.account} 계정으로 로그인했어요.")
-                else if (target == null && job.stepTries >= 2) endSwitch("계정 전환 실패: 로그인 화면에 ${job.account} 계정이 없어요. 스레드에 그 계정으로 한 번 로그인해 두세요.")
+                if (click(target)) endSwitch("${job.account} 계정으로 로그인했어요.")
             }
             "로그아웃 확인" -> { press("확인 버튼", exact("로그아웃") ?: exact("Log out")); job.loggedOut = true }
             "설정" -> {

@@ -112,6 +112,55 @@ object ThreadsKit {
         return true
     }
 
+    /**
+     * 큰 여백 줄이기용: 남길 세로 구간 계산.
+     * maxGap보다 긴 빈 구간은 위아래 maxGap/2씩만 남기고 가운데를 버림. 사진·영상(avoid) 안의 빈 부분은 건드리지 않음.
+     */
+    fun keepRanges(blank: BooleanArray, avoid: List<IntRange>, maxGap: Int): List<IntRange> {
+        val out = ArrayList<IntRange>()
+        var start = 0
+        var y = 0
+        fun inImage(a: Int, b: Int) = avoid.any { a < it.last && b > it.first }
+        while (y < blank.size) {
+            if (blank[y]) {
+                val s = y
+                while (y < blank.size && blank[y]) y++
+                if (y - s > maxGap && !inImage(s, y)) {
+                    val keepTop = if (s == 0) 0 else maxGap / 2 // 맨 위·맨 아래 여백은 전부 제거
+                    val keepBottom = if (y == blank.size) 0 else maxGap / 2
+                    if (s + keepTop > start) out += start until (s + keepTop)
+                    start = y - keepBottom
+                }
+            } else y++
+        }
+        if (start < blank.size) out += start until blank.size
+        return out
+    }
+
+    private fun blankRows(src: Bitmap): BooleanArray {
+        val row = IntArray(src.width)
+        return BooleanArray(src.height) { y -> src.getPixels(row, 0, src.width, 0, y, src.width, 1); isBlankRow(row) }
+    }
+
+    /** 큰 여백을 줄인 새 이미지와, 그에 맞게 옮긴 사진 위치를 반환 */
+    fun collapseBlank(src: Bitmap, avoid: List<IntRange>): Pair<Bitmap, List<IntRange>> {
+        val maxGap = maxOf(40, (src.width * 0.07f).toInt())
+        val keep = keepRanges(blankRows(src), avoid, maxGap)
+        val newH = keep.sumOf { it.last - it.first + 1 }
+        if (keep.isEmpty() || newH >= src.height - 8 || newH < 50) return src to avoid
+        val out = Bitmap.createBitmap(src.width, newH, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(out)
+        var dy = 0
+        val offsets = ArrayList<Triple<Int, Int, Int>>() // (원래 시작, 원래 끝, 새 시작)
+        for (r in keep) {
+            val h = r.last - r.first + 1
+            canvas.drawBitmap(src, Rect(0, r.first, src.width, r.last + 1), Rect(0, dy, src.width, dy + h), null)
+            offsets += Triple(r.first, r.last, dy); dy += h
+        }
+        fun map(y: Int): Int = offsets.firstOrNull { y <= it.second }?.let { it.third + maxOf(0, y - it.first) } ?: newH
+        return out to avoid.map { map(it.first)..map(it.last) }
+    }
+
     fun split(src: Bitmap, avoid: List<IntRange> = emptyList()): List<Bitmap> {
         val w = src.width
         val row = IntArray(w)

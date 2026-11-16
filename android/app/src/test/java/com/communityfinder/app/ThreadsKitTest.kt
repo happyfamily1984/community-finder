@@ -78,4 +78,12 @@ class ThreadsKitTest {
         val cuts = ThreadsKit.cutPoints(rows(600, listOf(195..205, 395..405)), 100, avoid = listOf(0..600))
         assertEquals(listOf(0, 200, 400, 600), cuts)
     }
+
+    @Test
+    fun collapsesLargeGapsButNotInsideImages() {
+        // 0~99 글, 100~299 큰 여백, 300~399 글, 400~599 사진(안에 빈 줄 450~549), 600~699 끝 여백
+        val blank = rows(700, listOf(100..299, 450..549, 600..699))
+        val keep = ThreadsKit.keepRanges(blank, avoid = listOf(400..599), maxGap = 40)
+        assertEquals(listOf(0..119, 280..619), keep) // 가운데 여백은 20+20만 남기고, 사진 속 빈 줄은 유지, 끝 여백은 20만 남김
+    }
 }
