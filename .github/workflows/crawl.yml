@@ -1,5 +1,8 @@
 # 클라우드 수집기: 10분마다 각 커뮤니티 베스트를 수집해 `data` 브랜치에 posts.json으로 올립니다.
 # 앱은 https://raw.githubusercontent.com/<owner>/<repo>/data/posts.json 을 받아갑니다.
+#
+# GitHub의 예약 실행(cron)은 몇 시간씩 밀리는 일이 잦아서, 한 번 켜지면 약 5시간 동안
+# 10분 간격으로 계속 수집하고, 끝날 때 다음 실행을 스스로 예약합니다. cron은 멈췄을 때 다시 켜는 용도입니다.
 name: crawl
 
 on:
@@ -9,7 +12,9 @@ on:
 
 permissions:
   contents: write
+  actions: write # 끝날 때 다음 실행을 예약하기 위해
 
+# 동시에 하나만 실행. 실행 중에 새로 들어온 것은 하나만 대기했다가 이어서 실행됨
 concurrency:
   group: crawl
   cancel-in-progress: false
@@ -17,7 +22,7 @@ concurrency:
 jobs:
   crawl:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 345
     steps:
       - uses: actions/checkout@v4
 
@@ -35,16 +40,45 @@ jobs:
             git show FETCH_HEAD:state.json > out/state.json 2>/dev/null || rm -f out/state.json
           fi
 
-      - name: 수집
-        run: OUT_DIR=out node src/crawl-once.js
-
-      - name: data 브랜치에 게시
+      - name: 10분마다 수집 (약 5시간)
+        env:
+          REPO_URL: https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git
         run: |
-          cd out
-          git init -q -b data
-          git config user.name "community-finder-bot"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add posts.json state.json
-          git commit -qm "data $(date -u +%FT%TZ)"
-          # 히스토리가 쌓이지 않도록 커밋 1개짜리 브랜치로 덮어씀
-          git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" data
+          end=$((SECONDS + 5 * 3600))
+          while [ $SECONDS -lt $end ]; do
+            started=$SECONDS
+
+            # 수집기 코드가 바뀌었으면 반영 (다음 5시간을 기다리지 않도록)
+            git pull -q --ff-only origin "${{ github.ref_name }}" || true
+
+            OUT_DIR=out node src/crawl-once.js || echo "이번 수집은 실패 (다음 차례에 다시 시도)"
+
+            # data 브랜치에 게시: 히스토리가 쌓이지 않도록 커밋 1개짜리 브랜치로 덮어씀
+            if [ -f out/posts.json ]; then
+              rm -rf pub && mkdir pub && cp out/posts.json out/state.json pub/
+              (
+                cd pub
+                git init -q -b data
+                git config user.name "community-finder-bot"
+                git config user.email "github-actions[bot]@users.noreply.github.com"
+                git add posts.json state.json
+                git commit -qm "data $(date -u +%FT%TZ)"
+                git push -qf "$REPO_URL" data
+              ) || echo "게시 실패 (다음 차례에 다시 시도)"
+            fi
+
+            # 시작한 지 10분이 될 때까지 쉼
+            wait=$((600 - (SECONDS - started)))
+            if [ $wait -gt 0 ]; then
+              if [ $((SECONDS + wait)) -ge $end ]; then break; fi
+              sleep $wait
+            fi
+          done
+
+      - name: 다음 실행 예약
+        # 직접 취소했을 때는 예약하지 않음. 수집을 멈추려면 실행 중인 것을 취소하고,
+        # cron이 다시 켜지 않게 하려면 Actions에서 이 워크플로를 비활성화
+        if: success() || failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run crawl.yml --ref "${{ github.ref_name }}" || echo "예약 실패 (cron이 다시 켜줌)"
