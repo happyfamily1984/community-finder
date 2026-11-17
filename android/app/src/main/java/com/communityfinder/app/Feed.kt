@@ -32,6 +32,8 @@ data class Post(
     val firstSeenAt: Long,
     /** 사진이 본문인 글의 원본 사진 주소 (해외 밈 등) */
     val image: String? = null,
+    /** 스레드로 내보낼 때 예상 이미지 장수 (클라우드가 글을 열어 추정. 모르면 null) */
+    val pages: Int? = null,
 )
 
 data class Feed(val updatedAt: Long, val sources: List<Source>, val posts: List<Post>) {
@@ -70,6 +72,7 @@ data class Feed(val updatedAt: Long, val sources: List<Source>, val posts: List<
                         viewsPerMin = p.optInt("viewsPerMin", 0),
                         firstSeenAt = p.optLong("firstSeenAt", 0),
                         image = p.optString("image").takeIf { it.startsWith("https://") },
+                        pages = p.optIntOrNull("pages"),
                     )
                 }
             }

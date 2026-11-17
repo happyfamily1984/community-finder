@@ -302,10 +302,12 @@ fun HomeScreen(
     var sort by rememberSaveable { mutableStateOf(SortBy.LATEST) }
     var query by rememberSaveable { mutableStateOf("") }
     var sortMenu by remember { mutableStateOf(false) }
+    var shortOnly by rememberSaveable { mutableStateOf(false) }
 
-    val posts = remember(feed, source, sort, query) {
+    val posts = remember(feed, source, sort, query, shortOnly) {
         val list = feed?.posts.orEmpty()
             .filter { source.isEmpty() || it.source == source }
+            .filter { !shortOnly || (it.pages != null && it.pages <= 2) }
             .filter { query.isBlank() || it.title.contains(query.trim(), ignoreCase = true) }
         when (sort) {
             SortBy.SCORE -> list.sortedByDescending { it.score }
@@ -327,6 +329,8 @@ fun HomeScreen(
                         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
+                        // 스레드에 올리기 좋은 짧은 글(내보내기 예상 1~2장)만 보기
+                        item { SourceChip(if (shortOnly) "✂ 짧은 글만 ✓" else "✂ 짧은 글만", null, shortOnly, ok = true) { shortOnly = !shortOnly } }
                         item { SourceChip("전체", null, source == "", ok = true) { source = "" } }
                         items(feed?.sources.orEmpty()) { s ->
                             SourceChip(s.name, Color(s.color), source == s.id, s.ok) { source = s.id }
@@ -361,6 +365,7 @@ fun HomeScreen(
                             when {
                                 feed == null && error == null -> "불러오는 중…"
                                 feed == null -> "데이터를 받지 못했어요. 아래로 당겨 다시 시도하세요."
+                                shortOnly -> "짧은 글로 확인된 글이 아직 없어요.\n(길이는 디시·클리앙·네이트판·보배드림 글만, 새 글부터 조금씩 확인해요)"
                                 else -> "표시할 글이 없어요"
                             },
                         )
@@ -520,6 +525,10 @@ fun PostCard(p: Post, src: Source?, favorite: Boolean, onClick: () -> Unit, onLo
                 p.views?.let { Stat(Icons.Outlined.Visibility, fmt(it)) }
                 p.comments?.let { Stat(Icons.Outlined.ChatBubbleOutline, fmt(it)) }
                 p.likes?.let { Spacer(Modifier.width(8.dp)); Text("👍 ${fmt(it)}", fontSize = 12.sp, color = muted, maxLines = 1) }
+                p.pages?.let { n ->
+                    Text("  ✂${n}장", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
+                        color = if (n <= 2) Color(0xFF22B573) else muted)
+                }
                 if (p.viewsPerMin >= 50) {
                     Text("  🚀${fmt(p.viewsPerMin)}/분", fontSize = 12.sp, color = HotOrange, fontWeight = FontWeight.SemiBold, maxLines = 1)
                 }

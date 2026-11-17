@@ -22,8 +22,8 @@ const feed = {
     ...(selectors ? { local: { url, selectors, keepParams: keepParams ?? [], titleStrip: titleStrip ?? '' } } : {}),
   })),
   posts: crawler.list({ sort: 'score', limit: 500 }).map(
-    ({ id, source, title, url, views, comments, likes, score, viewsPerMin, firstSeenAt, rank, image }) => ({
-      id, source, title, url, views, comments, likes, score, viewsPerMin, firstSeenAt, rank, ...(image ? { image } : {}),
+    ({ id, source, title, url, views, comments, likes, score, viewsPerMin, firstSeenAt, rank, image, pages }) => ({
+      id, source, title, url, views, comments, likes, score, viewsPerMin, firstSeenAt, rank, ...(image ? { image } : {}), ...(pages ? { pages } : {}),
     }),
   ),
 };

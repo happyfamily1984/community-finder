@@ -8,6 +8,7 @@
 //   keepParams : 글 주소에서 남길 쿼리 파라미터 (나머지는 제거 → 같은 글이 순위가 바뀌어도 같은 id)
 //   titleStrip : 제목에서 지울 패턴 (정규식)
 //   disabled : true면 수집 안 함
+//   body : 글 본문 선택자. 있으면 새 글을 한 번 열어 '내보내기 몇 장'인지 추정 (클라우드 접근이 되는 곳만)
 import { fetchReddit, fetchLemmy, fetchRss } from './global.js';
 
 export const SOURCES = [
@@ -18,6 +19,7 @@ export const SOURCES = [
     url: 'https://gall.dcinside.com/board/lists/?id=dcbest',
     color: '#3b4890',
     keepParams: ['id', 'no'],
+    body: '.write_div', // 글 본문 (길이 추정용)
     selectors: {
       row: 'tr.ub-content.us-post',
       exclude: '[data-type="icon_notice"]',
@@ -78,6 +80,7 @@ export const SOURCES = [
     board: '모두의공원 추천',
     url: 'https://www.clien.net/service/board/park?&od=T33',
     color: '#3d5a80',
+    body: '.post_article', // 글 본문 (길이 추정용)
     selectors: {
       row: 'div.list_item.symph_row',
       exclude: '.blocked, .notice',
@@ -94,6 +97,7 @@ export const SOURCES = [
     board: '랭킹',
     url: 'https://pann.nate.com/talk/ranking',
     color: '#ef4136',
+    body: '#contentArea', // 글 본문 (길이 추정용)
     selectors: {
       row: 'ul.post_wrap > li',
       title: 'dt a',
@@ -109,6 +113,7 @@ export const SOURCES = [
     url: 'https://www.bobaedream.co.kr/list?code=best',
     color: '#0072bc',
     keepParams: ['code', 'No'],
+    body: '.bodyCont', // 글 본문 (길이 추정용)
     selectors: {
       row: 'table#boardlist tbody tr[itemtype]',
       title: 'a.bsubject',

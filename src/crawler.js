@@ -4,6 +4,7 @@ import { ACTIVE_SOURCES as SOURCES } from './sources.js';
 import { fetchHtml } from './fetcher.js';
 import { parseList } from './parser.js';
 import { scorePosts } from './score.js';
+import { estimatePages } from './measure.js';
 
 const KEEP_MS = 24 * 60 * 60 * 1000; // 24시간 지난 글은 정리
 
@@ -12,6 +13,10 @@ export class Crawler {
     // fetchItems(source) -> 글 배열. 기본값은 실제 사이트를 가져와 파싱
     this.fetchItems = fetchItems ?? (async (source) => (source.fetch ? source.fetch(source) : parseList(await fetchHtml(source.url), source)));
     this.sources = sources;
+    // 글 길이 추정은 실제 수집일 때만 (테스트·데모에서는 끔). 사이트에 무리가 안 되도록 한 번에 조금씩만
+    this.measureBody = fetchItems ? null : fetchHtml;
+    this.measurePerRun = 8;
+    this.measureDelayMs = 1500;
     this.onNewPosts = onNewPosts;
     this.posts = new Map();
     this.status = {}; // source id -> { ok, count, error, at }
@@ -83,6 +88,7 @@ export class Crawler {
     }
 
     scorePosts([...this.posts.values()].filter((p) => p.onBoard));
+    await this.measureNewPosts();
     this.lastCrawlAt = now;
     this.save();
 
@@ -90,6 +96,27 @@ export class Crawler {
     if (this.hasCrawledBefore && fresh.length) this.onNewPosts(fresh);
     this.hasCrawledBefore = true;
     return fresh;
+  }
+
+  // 아직 길이를 모르는 글 중 화제도 높은 순으로 몇 개만 열어서 '내보내기 몇 장'인지 추정
+  async measureNewPosts() {
+    if (!this.measureBody) return;
+    const bodyOf = Object.fromEntries(this.sources.filter((s) => s.body).map((s) => [s.id, s.body]));
+    const todo = [...this.posts.values()]
+      .filter((p) => p.onBoard && bodyOf[p.source] && p.pages === undefined && (p.measureTries ?? 0) < 2)
+      .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+      .slice(0, this.measurePerRun);
+    for (const p of todo) {
+      p.measureTries = (p.measureTries ?? 0) + 1;
+      try {
+        const est = estimatePages(await this.measureBody(p.url), bodyOf[p.source]);
+        if (est) p.pages = est.pages;
+      } catch {
+        // 실패하면 다음 수집 때 한 번만 더 시도
+      }
+      await new Promise((r) => setTimeout(r, this.measureDelayMs));
+    }
+    if (todo.length) console.log(`[measure] ${todo.filter((p) => p.pages !== undefined).length}/${todo.length}개 글 길이 추정`);
   }
 
   list({ source, sort = 'score', q, limit = 200 } = {}) {

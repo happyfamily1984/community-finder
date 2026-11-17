@@ -39,7 +39,7 @@ class PostStore(ctx: Context, name: String, private val max: Int) {
             .put("id", p.id).put("source", p.source).put("title", p.title).put("url", p.url)
             .put("views", p.views ?: JSONObject.NULL).put("comments", p.comments ?: JSONObject.NULL)
             .put("likes", p.likes ?: JSONObject.NULL).put("score", p.score)
-            .put("viewsPerMin", p.viewsPerMin).put("firstSeenAt", p.firstSeenAt).put("image", p.image ?: JSONObject.NULL)
+            .put("viewsPerMin", p.viewsPerMin).put("firstSeenAt", p.firstSeenAt).put("image", p.image ?: JSONObject.NULL).put("pages", p.pages ?: JSONObject.NULL)
 
         fun fromJson(o: JSONObject) = Post(
             id = o.getString("id"), source = o.getString("source"), title = o.getString("title"),
@@ -47,6 +47,7 @@ class PostStore(ctx: Context, name: String, private val max: Int) {
             likes = o.intOrNull("likes"), score = o.optInt("score"), viewsPerMin = o.optInt("viewsPerMin"),
             firstSeenAt = o.optLong("firstSeenAt"),
             image = o.optString("image").takeIf { it.startsWith("https://") },
+            pages = o.intOrNull("pages"),
         )
     }
 }

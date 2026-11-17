@@ -62,3 +62,14 @@ test('RSS/RDF 파싱: 북마크 수, 광고 제외', async () => {
   const posts = parseRss(xml, { id: 'jp-test' });
   assert.deepEqual(posts.map((p) => [p.id, p.title, p.likes]), [['jp-test:https://a.jp/1', '猫が かわいい', 321], ['jp-test:https://a.jp/2', '犬', null]]);
 });
+
+test('글 길이 추정: 짧은 글은 1장, 사진 많은 글은 여러 장', async () => {
+  const { estimatePages } = await import('../src/measure.js');
+  const short = '<div class="b"><p>짧은 글입니다</p><img src="a.jpg" width="600" height="400"></div>';
+  assert.equal(estimatePages(short, '.b').pages, 1);
+  const long = `<div class="b">${'<img src="x.jpg">'.repeat(8)}<p>${'가'.repeat(600)}</p></div>`;
+  assert.ok(estimatePages(long, '.b').pages >= 4);
+  // 이모티콘은 사진으로 세지 않음
+  assert.equal(estimatePages('<div class="b"><img class="dccon" src="e.png"><p>ㅋㅋ</p></div>', '.b').media, 0);
+  assert.equal(estimatePages('<div>없음</div>', '.b'), null);
+});
