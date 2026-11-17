@@ -92,13 +92,24 @@ class SummarizerTest {
     }
 
     @Test
-    fun promptIncludesBuiltinAndUserExamples() {
-        val sys = Summarizer.systemPrompt(listOf("내가 추가한 잘 된 글\n\n둘째 줄"))
-        assertTrue(sys.contains("기지국 통신기록조회") && sys.contains("내가 추가한 잘 된 글") && sys.contains("[본보기 2]"))
-        val free = Summarizer.systemPrompt(listOf("내가 추가한 잘 된 글"), useExamples = false)
-        assertTrue(!free.contains("기지국") && !free.contains("본보기 1") && free.contains("정해진 틀 없이"))
-        // 최근 5개까지만
-        assertTrue(!Summarizer.systemPrompt((1..9).map { "예시 글 번호 $it 입니다 길게" }).contains("예시 글 번호 4 "))
+    fun promptUsesExamplesAsTemplates() {
+        val mine = listOf("[장소]에서 있었던 일.\n\n[상황]", "[이슈] 한 번에 정리")
+        // 자동: 모든 본보기를 보여주고 하나만 고르게 함 (내 글이 먼저)
+        val auto = Summarizer.systemPrompt(mine)
+        assertTrue(auto.indexOf("[장소]에서 있었던 일") < auto.indexOf("기지국 통신기록조회") && auto.contains("[본보기 3]") && auto.contains("하나만 골라"))
+        // 지정: 그 본보기 하나만
+        val forced = Summarizer.systemPrompt(mine, forced = 1)
+        assertTrue(forced.contains("[이슈] 한 번에 정리") && !forced.contains("기지국") && !forced.contains("[장소]에서"))
+        assertEquals(3, Summarizer.pool(mine).size)
+        // 끔: 본보기 없음
+        val free = Summarizer.systemPrompt(mine, useExamples = false)
+        assertTrue(!free.contains("기지국") && !free.contains("[장소]") && free.contains("정해진 틀 없이"))
+    }
+
+    @Test
+    fun cleanKeepsNumberingForTemplatesAndDropsBrackets() {
+        assertEquals("1. 첫째\n2. 둘째", Summarizer.clean("1. 첫째\n2. 둘째", keepMarkers = true))
+        assertEquals("강남역에서 있었던 일.", Summarizer.clean("[강남역]에서 있었던 일.", keepMarkers = true))
     }
 
     @Test

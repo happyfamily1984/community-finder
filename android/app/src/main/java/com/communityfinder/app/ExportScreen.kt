@@ -55,6 +55,7 @@ fun ExportDetail(post: Post, source: Source?, onBack: () -> Unit) {
     var review by remember { mutableStateOf(post.title) }
     var summaryState by remember { mutableStateOf("") } // "", "working", "done", 또는 실패 사유
     var summaryRun by remember { mutableIntStateOf(0) }
+    var usedExample by remember { mutableStateOf("") }
     var hitStyle by remember { mutableStateOf(Prefs(ctx).useHitStyle) }
     var zoomIndex by remember { mutableStateOf<Int?>(null) }
     var showAutoHelp by remember { mutableStateOf(false) }
@@ -105,8 +106,8 @@ fun ExportDetail(post: Post, source: Source?, onBack: () -> Unit) {
         if (summaryRun == 0 && summaryState == "done") return@LaunchedEffect
         if (!Summarizer.hasKey(ctx)) { summaryState = "요약하려면 설정에서 Gemini나 Groq 무료 키를 넣어주세요. 지금은 제목만 들어가요."; return@LaunchedEffect }
         summaryState = "working"
-        val sum = Summarizer.summarize(ctx, post.title, result?.text.orEmpty(), ps)
-        if (sum != null) { review = sum; summaryState = "done" }
+        val sum = Summarizer.summarize(ctx, post.title, result?.text.orEmpty(), ps, summaryRun)
+        if (sum != null) { review = sum.text; usedExample = sum.usedLabel; summaryState = "done" }
         else summaryState = "요약 실패: ${Gemini.lastError ?: Groq.lastError ?: "알 수 없는 오류"} · 지금은 제목만 들어가요."
     }
 
@@ -187,7 +188,8 @@ fun ExportDetail(post: Post, source: Source?, onBack: () -> Unit) {
                                     CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
                                     Spacer(Modifier.width(8.dp)); Text("글 내용을 읽고 요약하는 중…", fontSize = 13.sp)
                                 }
-                                "", "done" -> {}
+                                "done" -> Text(usedExample, fontSize = 12.sp, lineHeight = 16.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                "" -> {}
                                 else -> Text(summaryState, fontSize = 13.sp, lineHeight = 18.sp, color = MaterialTheme.colorScheme.error)
                             }
                             Spacer(Modifier.height(6.dp))
