@@ -96,7 +96,7 @@ class SummarizerTest {
         val mine = listOf("[장소]에서 있었던 일.\n\n[상황]", "[이슈] 한 번에 정리")
         // 자동: 모든 본보기를 보여주고 하나만 고르게 함 (내 글이 먼저)
         val auto = Summarizer.systemPrompt(mine)
-        assertTrue(auto.indexOf("[장소]에서 있었던 일") < auto.indexOf("기지국 통신기록조회") && auto.contains("[본보기 3]") && auto.contains("하나만 골라"))
+        assertTrue(auto.indexOf("[장소]에서 있었던 일") < auto.indexOf("기지국 통신기록조회") && auto.contains("[참고 본보기 3]") && auto.contains("참고만 한다") && auto.indexOf("가장 중요한 것은") < auto.indexOf("참고만 한다"))
         // 지정: 그 본보기 하나만
         val forced = Summarizer.systemPrompt(mine, forced = 1)
         assertTrue(forced.contains("[이슈] 한 번에 정리") && !forced.contains("기지국") && !forced.contains("[장소]에서"))

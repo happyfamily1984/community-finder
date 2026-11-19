@@ -42,25 +42,34 @@ object Summarizer {
     private const val INTRO = "너는 커뮤니티 게시글을 스레드(Threads)에 올릴 글로 바꿔 쓰는 작가다. " +
         "입력은 게시글 제목과 본문이며, 본문은 이미지에서 글자를 읽은 것이라 오타나 순서 뒤섞임, 메뉴·버튼 글자가 섞여 있을 수 있다.\n\n"
 
-    private const val HOW_TO_USE = "아래 본보기는 스레드에서 실제로 반응이 좋았던 글의 '틀'이다. 이 틀에 이 글의 내용을 넣어서 쓴다.\n" +
-        "- 본보기의 줄 수, 줄 순서, 각 줄이 하는 역할, 말투, 줄 사이 빈 줄, (있다면) 이모지·번호·기호를 그대로 따른다.\n" +
-        "- [대괄호] 안의 말은 '여기에 무엇을 넣을지' 알려주는 자리 표시다. 이 글의 내용으로 바꿔 넣고, 대괄호 자체는 절대 출력하지 않는다.\n" +
-        "- 본보기에 들어 있는 실제 내용이나 문장은 베끼지 않는다. 틀만 가져온다.\n" +
-        "- 틀의 어떤 줄에 넣을 내용이 이 글에 없으면 그 줄은 지어내지 말고 뺀다.\n"
+    /** 내용이 먼저: 글을 제대로 요약하는 것이 1순위. 본보기는 호흡·말투를 참고하는 용도 */
+    private const val CONTENT_FIRST = "가장 중요한 것은 이 글의 내용을 정확하고 알차게 전하는 것이다. 순서대로 한다.\n" +
+        "1) 먼저 글을 끝까지 읽고 무슨 내용인지 파악한다: 누가, 무슨 일이, 왜, 어떻게 됐는지. 글에서 가장 흥미로운 지점 하나를 고른다.\n" +
+        "2) 그 내용을 읽는 사람이 원문을 안 봐도 이해하도록 요약한다. 글의 성격에 맞는 흐름을 스스로 정한다 " +
+        "(사건·논란: 무슨 일 → 쟁점 → 결과 / 유머: 상황 → 웃긴 지점 / 정보: 핵심 사실 → 필요한 숫자·방법 / 사연: 있었던 일 → 마음이 가는 대목).\n" +
+        "3) 첫 줄은 스크롤을 멈추게 하되, 반드시 이 글의 실제 내용에서 나와야 한다.\n" +
+        "형식: 문장마다 한 줄, 문장 사이에 빈 줄 하나. 길이는 글에 맞게 3~6줄. 말투는 한국 커뮤니티·스레드의 자연스러운 반말 구어체.\n\n"
+
+    private const val HOW_TO_USE = "아래 본보기는 스레드에서 반응이 좋았던 글이다. 참고만 한다.\n" +
+        "- 본보기에서 가져올 것: 첫 줄로 끌어들이는 방식, 짧게 끊는 호흡, 말투의 느낌. 이 글에 어울릴 때만 가져온다.\n" +
+        "- 본보기의 줄 수·줄 순서·문장 틀에 글을 억지로 끼워 맞추지 않는다. 본보기와 글의 성격이 다르면 본보기를 무시하고 내용에 맞게 쓴다.\n" +
+        "- 본보기에 있는 줄이라도 이 글에 해당하는 내용이 없으면 만들지 않는다. 이 글에 꼭 필요한 내용이 본보기 틀에 없으면 줄을 더한다.\n" +
+        "- [대괄호]는 '여기에 이런 내용이 들어간다'는 설명일 뿐이다. 대괄호는 절대 출력하지 않는다.\n" +
+        "- 본보기에 들어 있는 실제 내용이나 문장은 베끼지 않는다. 이모지·번호·기호는 본보기에 있고 이 글에도 어울릴 때만 쓴다.\n"
 
     /**
      * 요약 지시문.
-     * @param forced 꼭 따를 본보기 번호(pool의 인덱스). null이면 글 성격에 맞는 것을 AI가 고름
+     * @param forced 이번에 참고할 본보기 번호(pool의 인덱스). null이면 전부 보여주고 어울리는 것을 참고하게 함
      */
     fun systemPrompt(userExamples: List<String>, useExamples: Boolean = true, forced: Int? = null): String {
         if (!useExamples) return FREE_RULES
         val pool = pool(userExamples)
-        val sb = StringBuilder(INTRO).append(HOW_TO_USE)
+        val sb = StringBuilder(INTRO).append(CONTENT_FIRST).append(HOW_TO_USE)
         if (forced != null && pool.isNotEmpty()) {
-            sb.append("\n이번에는 반드시 아래 본보기의 틀로 쓴다.\n\n[본보기]\n").append(pool[Math.floorMod(forced, pool.size)]).append("\n")
+            sb.append("\n이번에는 아래 본보기의 느낌을 참고한다. 단, 글 내용과 안 맞는 부분은 따르지 않는다.\n\n[참고 본보기]\n").append(pool[Math.floorMod(forced, pool.size)]).append("\n")
         } else {
-            sb.append("- 본보기가 여러 개면, 이 글의 성격(사건·논란 / 유머 / 정보 / 사연 등)에 가장 잘 맞는 하나만 골라 그 틀로 쓴다. 여러 본보기를 섞지 않는다.\n")
-            pool.take(8).forEachIndexed { i, e -> sb.append("\n[본보기 ${i + 1}]\n").append(e).append("\n") }
+            sb.append("- 본보기가 여러 개면 이 글의 성격과 가장 가까운 것 하나의 느낌만 참고한다. 맞는 것이 없으면 아무것도 참고하지 않는다.\n")
+            pool.take(8).forEachIndexed { i, e -> sb.append("\n[참고 본보기 ${i + 1}]\n").append(e).append("\n") }
         }
         return sb.append("\n").append(COMMON).toString()
     }
@@ -130,8 +139,8 @@ object Summarizer {
         val text = clean(raw, keepMarkers = use).takeIf { it.isNotBlank() } ?: return null
         val label = when {
             !use -> "본보기 끔 · 자유 요약"
-            forced != null -> "본보기 ${forced + 1}/${pool.size}: ${pool[forced].lineSequence().first().take(22)}"
-            else -> "본보기 자동 선택 (${pool.size}개 중) · '다시 요약'을 누르면 하나씩 바꿔 써요"
+            forced != null -> "참고한 본보기 ${forced + 1}/${pool.size}: ${pool[forced].lineSequence().first().take(22)}"
+            else -> "내용 우선 요약 · 본보기 ${pool.size}개는 참고만 · '다시 요약'을 누르면 참고할 본보기를 바꿔요"
         }
         return Result(text, label)
     }

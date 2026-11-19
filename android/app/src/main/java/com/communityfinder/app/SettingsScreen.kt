@@ -242,7 +242,7 @@ fun SettingsScreen(feed: Feed?, onBack: (() -> Unit)? = null, onSetup: (() -> Un
                     AccentTitle("잘 터진 글 (요약 본보기)")
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        "스레드에서 반응이 좋았던 글(또는 [대상], [주제]처럼 빈칸을 둔 틀)을 추가하면, 요약할 때 그 틀을 따라 써요. 처음엔 글에 맞는 본보기를 AI가 고르고, '다시 요약'을 누를 때마다 다음 본보기로 바꿔요. 지금 ${Summarizer.pool(hits).size}개",
+                        "스레드에서 반응이 좋았던 글을 추가하면, 요약할 때 그 글의 첫 줄 방식·호흡·말투를 참고해요. 요약은 항상 글 내용이 먼저이고, 본보기는 어울릴 때만 참고해요. '다시 요약'을 누르면 참고할 본보기를 바꿔요. 지금 ${Summarizer.pool(hits).size}개",
                         fontSize = 13.sp, lineHeight = 19.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Spacer(Modifier.height(10.dp))
