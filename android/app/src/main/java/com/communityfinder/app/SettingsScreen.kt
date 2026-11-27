@@ -64,6 +64,8 @@ fun SettingsScreen(feed: Feed?, onBack: (() -> Unit)? = null, onSetup: (() -> Un
     var switchLog by remember { mutableStateOf<String?>(null) }
     var hits by remember { mutableStateOf(prefs.hitExamples) }
     var hitDraft by remember { mutableStateOf("") }
+    var backupDraft by remember { mutableStateOf("") }
+    var backupMsg by remember { mutableStateOf<String?>(null) }
     var hitView by remember { mutableStateOf<Pair<String, Boolean>?>(null) }
     var groqKey by remember { mutableStateOf(prefs.groqKey) }
     var groqStatus by remember { mutableStateOf<String?>(null) }
@@ -395,6 +397,34 @@ fun SettingsScreen(feed: Feed?, onBack: (() -> Unit)? = null, onSetup: (() -> Un
                             Text("테스트 알림 보내기", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, fontSize = 15.sp)
                         }
                     }
+                }
+
+                // 설정 백업·복원
+                SettingsCard {
+                    AccentTitle("설정 백업 · 복원 (휴대폰 바꿀 때)")
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "번역 키, 내가 추가한 본보기, 스레드 계정, 알림 조건을 글자로 복사해요. 메모장이나 '나에게 보내기'에 붙여 두었다가, 새 휴대폰의 이 칸에 붙여넣고 '복원'을 누르면 돼요. API 키가 들어 있으니 남에게 보여주지 마세요.",
+                        fontSize = 13.sp, lineHeight = 19.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    Button(shape = CircleShape, onClick = { ThreadsKit.copy(ctx, "설정 백업", prefs.exportBackup()); backupMsg = "복사했어요. 안전한 곳에 붙여 두세요." }) { Text("백업 복사", fontWeight = FontWeight.Bold) }
+                    Spacer(Modifier.height(10.dp))
+                    OutlinedTextField(
+                        backupDraft, { backupDraft = it }, Modifier.fillMaxWidth().heightIn(min = 72.dp, max = 140.dp),
+                        placeholder = { Text("복원할 백업 글자를 여기에 붙여넣기", fontSize = 14.sp) },
+                        textStyle = LocalTextStyle.current.copy(fontSize = 12.sp),
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    OutlinedButton(shape = CircleShape, enabled = backupDraft.contains("{"), onClick = {
+                        if (prefs.importBackup(backupDraft)) {
+                            geminiKey = prefs.geminiKey; groqKey = prefs.groqKey; redditId = prefs.redditClientId; hits = prefs.hitExamples
+                            threadsAccount = prefs.threadsAccount; minScore = prefs.minScore.toFloat(); keywords = prefs.keywordsText
+                            muted = prefs.mutedSources; interval = prefs.intervalMin; fmLocal = prefs.fmkoreaLocal
+                            backupDraft = ""; backupMsg = "복원했어요. 알림은 위에서 다시 켜주세요."
+                        } else backupMsg = "백업 글자를 읽지 못했어요. 처음부터 끝까지 전부 붙여넣었는지 확인해 주세요."
+                    }) { Text("복원", fontWeight = FontWeight.Bold) }
+                    backupMsg?.let { Spacer(Modifier.height(8.dp)); Text(it, fontSize = 13.sp) }
                 }
 
                 if (onSetup != null) {

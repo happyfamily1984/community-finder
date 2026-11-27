@@ -102,4 +102,38 @@ class Prefs(ctx: Context) {
     var seenIds: Set<String>?
         get() = sp.getStringSet("seen", null)
         set(v) = sp.edit().putStringSet("seen", v).apply()
+
+    // ---- 설정 백업·복원 (휴대폰을 바꿀 때 옮기기 위함) ----
+
+    /** 옮길 설정을 글자로 내보냄. API 키가 들어 있으니 남에게 보여주면 안 됨 */
+    fun exportBackup(): String = org.json.JSONObject()
+        .put("app", "community-finder").put("v", 1)
+        .put("geminiKey", geminiKey).put("groqKey", groqKey).put("redditClientId", redditClientId)
+        .put("hitExamples", org.json.JSONArray(hitExamples)).put("useHitStyle", useHitStyle)
+        .put("threadsAccount", threadsAccount)
+        .put("notify", notifyEnabled).put("minScore", minScore).put("keywords", keywordsText)
+        .put("muted", org.json.JSONArray(mutedSources.toList())).put("interval", intervalMin)
+        .put("fmkoreaLocal", fmkoreaLocal).put("redditLocal", redditLocal)
+        .toString()
+
+    /** 백업 글자를 읽어 설정을 되돌림. 반환: 성공 여부 */
+    fun importBackup(text: String): Boolean = runCatching {
+        val o = org.json.JSONObject(text.trim().let { it.substring(it.indexOf('{'), it.lastIndexOf('}') + 1) })
+        if (o.optString("app") != "community-finder") return false
+        fun arr(k: String) = o.optJSONArray(k)?.let { a -> (0 until a.length()).map { a.getString(it) } }.orEmpty()
+        if (o.has("geminiKey")) geminiKey = o.getString("geminiKey")
+        if (o.has("groqKey")) groqKey = o.getString("groqKey")
+        if (o.has("redditClientId")) redditClientId = o.getString("redditClientId")
+        if (o.has("hitExamples")) hitExamples = arr("hitExamples")
+        if (o.has("useHitStyle")) useHitStyle = o.getBoolean("useHitStyle")
+        if (o.has("threadsAccount")) threadsAccount = o.getString("threadsAccount")
+        if (o.has("minScore")) minScore = o.getInt("minScore")
+        if (o.has("keywords")) keywordsText = o.getString("keywords")
+        if (o.has("muted")) mutedSources = arr("muted").toSet()
+        if (o.has("interval")) intervalMin = o.getInt("interval")
+        if (o.has("fmkoreaLocal")) fmkoreaLocal = o.getBoolean("fmkoreaLocal")
+        if (o.has("redditLocal")) redditLocal = o.getBoolean("redditLocal")
+        // 알림은 새 휴대폰에서 권한을 다시 받아야 하므로 켜짐 여부는 옮기지 않음
+        true
+    }.getOrDefault(false)
 }
